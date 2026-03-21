@@ -320,44 +320,114 @@ body {
 .p2p-status.show { display: flex; }
 .p2p-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--accent); }
 
-.controls {
-  display: flex; align-items: center; gap: 1rem;
-  padding: 1rem 1.5rem;
-  background: var(--surface4);
-  border-top: 1px solid var(--border2);
-  flex-shrink: 0; backdrop-filter: blur(8px);
-  min-height: 64px;
+/* ── CUSTOM PLAYER ── */
+.player-controls {
+  position: relative;
+  flex-shrink: 0;
+  background: linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.0) 100%);
+  padding: .5rem 1.25rem .85rem;
+  z-index: 5;
 }
-.play-btn {
-  width: 44px; height: 44px;
-  border: 1px solid var(--border-accent);
-  border-radius: 50%; background: var(--btn-bg);
+
+/* Progress bar */
+.player-progress-wrap {
+  display: flex; align-items: center; gap: .75rem;
+  margin-bottom: .5rem;
+}
+.player-progress-bg {
+  flex: 1; height: 4px; background: rgba(255,255,255,0.15);
+  border-radius: 4px; cursor: pointer; position: relative;
+  transition: height .15s;
+}
+.player-progress-bg:hover { height: 6px; }
+.player-progress-fill {
+  position: absolute; left: 0; top: 0; height: 100%;
+  background: var(--accent); border-radius: 4px;
+  pointer-events: none;
+}
+.player-progress-thumb {
+  position: absolute; top: 50%; transform: translate(-50%,-50%);
+  width: 13px; height: 13px; border-radius: 50%;
+  background: #fff; pointer-events: none;
+  box-shadow: 0 0 4px rgba(0,0,0,0.4);
+  opacity: 0; transition: opacity .15s;
+}
+.player-progress-bg:hover .player-progress-thumb { opacity: 1; }
+.player-time {
+  font-family: monospace; font-size: .68rem;
+  color: rgba(255,255,255,0.55); white-space: nowrap; flex-shrink: 0;
+}
+
+/* Bottom row */
+.player-row {
+  display: flex; align-items: center; justify-content: space-between;
+}
+.player-left, .player-right { display: flex; align-items: center; gap: .25rem; }
+
+.player-btn {
+  width: 36px; height: 36px;
+  border: none; background: transparent;
   display: flex; align-items: center; justify-content: center;
-  cursor: pointer; flex-shrink: 0; transition: all .15s;
+  cursor: pointer; border-radius: 8px;
+  color: rgba(255,255,255,0.7);
+  transition: all .15s;
 }
-.play-btn:hover { background: var(--btn-bg-hover); }
-.play-btn svg { width: 16px; height: 16px; fill: var(--accent2); stroke: none; }
-.progress-wrap { flex: 1; display: flex; flex-direction: column; gap: 6px; }
-.progress {
-  width: 100%; height: 4px;
-  -webkit-appearance: none; appearance: none;
-  background: var(--progress-bg); border-radius: 2px; cursor: pointer; outline: none;
+.player-btn:hover { color: #fff; background: rgba(255,255,255,0.1); }
+.player-btn svg { display: block; }
+
+/* Volume */
+.player-vol-wrap { display: flex; align-items: center; gap: .25rem; }
+.player-vol-slider {
+  width: 72px; height: 3px; -webkit-appearance: none;
+  background: rgba(255,255,255,0.2); border-radius: 2px;
+  outline: none; cursor: pointer;
 }
-.progress::-webkit-slider-thumb {
-  -webkit-appearance: none; width: 14px; height: 14px;
-  border-radius: 50%; background: var(--accent); cursor: pointer;
+.player-vol-slider::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 11px; height: 11px;
+  border-radius: 50%; background: #fff; cursor: pointer;
 }
-.time-label { font-family: monospace; font-size: .7rem; color: var(--text-faint); }
-.vol-wrap { display: flex; align-items: center; gap: .5rem; flex-shrink: 0; }
-.vol-wrap svg { width: 16px; height: 16px; stroke: var(--text-muted); fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
-.vol-slider {
-  width: 80px; height: 4px; -webkit-appearance: none;
-  background: var(--progress-bg); border-radius: 2px; outline: none; cursor: pointer;
+
+/* ── FULLSCREEN MODE ── */
+.video-area.fullscreen {
+  position: fixed !important; inset: 0 !important;
+  z-index: 1000 !important; background: #000 !important;
+  width: 100vw !important; height: 100vh !important;
 }
-.vol-slider::-webkit-slider-thumb {
-  -webkit-appearance: none; width: 12px; height: 12px;
-  border-radius: 50%; background: var(--text-muted); cursor: pointer;
+.video-area.fullscreen #videoPlayer {
+  width: 100% !important; height: calc(100vh - 60px) !important;
+  flex: none !important;
 }
+.video-area.fullscreen .player-controls {
+  position: absolute !important; bottom: 0; left: 0; right: 0;
+  opacity: 0; transition: opacity .25s;
+}
+.video-area.fullscreen:hover .player-controls,
+.video-area.fullscreen.show-controls .player-controls { opacity: 1; }
+.video-area.fullscreen #videoPlayer { cursor: none; }
+.video-area.fullscreen:hover #videoPlayer { cursor: default; }
+
+/* Fullscreen chat overlay */
+.fs-chat {
+  position: absolute; top: 0; right: 0;
+  width: 300px; height: 100%;
+  background: rgba(0,0,0,0.55);
+  backdrop-filter: blur(12px);
+  display: none; flex-direction: column;
+  z-index: 10;
+  border-left: 1px solid rgba(255,255,255,0.08);
+}
+.fs-chat.show { display: flex; }
+.fs-chat .messages {
+  flex: 1; padding: .75rem; overflow-y: auto;
+  scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.1) transparent;
+}
+.fs-chat .messages .msg-text { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.06); color: rgba(255,255,255,0.85); }
+.fs-chat .messages .msg-author { color: var(--accent); }
+.fs-chat .messages .msg-system .msg-text { color: rgba(255,255,255,0.3); }
+.fs-chat .chat-input-wrap { border-top: 1px solid rgba(255,255,255,0.08); }
+.fs-chat .chat-input { background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.1); color: #fff; }
+.fs-chat .chat-input::placeholder { color: rgba(255,255,255,0.25); }
+
 
 /* SIDEBAR */
 .sidebar {
@@ -711,22 +781,63 @@ body {
         <div class="waiting-spinner"></div>
         <div class="waiting-text" id="waitingText">Waiting for host…</div>
       </div>
-      <video id="videoPlayer" controls></video>
+      <video id="videoPlayer"></video>
       <div class="p2p-status" id="p2pStatus">
         <div class="p2p-dot"></div>
         <span id="p2pStatusText">Connecting…</span>
       </div>
-      <div class="controls" id="controls" style="display:none">
-        <div class="play-btn" id="playPauseBtn" onclick="togglePlay()">
-          <svg id="playIcon" viewBox="0 0 24 24"><path d="M5,3 L19,12 L5,21 Z" fill="currentColor" stroke="none"/></svg>
+      <!-- Fullscreen chat overlay -->
+      <div class="fs-chat" id="fsChat">
+        <div class="messages" id="fsChatMessages"></div>
+        <div class="chat-input-wrap">
+          <input type="text" class="chat-input" id="fsChatInput" placeholder="Message…" maxlength="300" onkeydown="if(event.key==='Enter')sendFsChat()">
+          <button class="send-btn" onclick="sendFsChat()">
+            <svg viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22,2 15,22 11,13 2,9"/></svg>
+          </button>
         </div>
-        <div class="progress-wrap">
-          <input type="range" class="progress" id="progressBar" value="0" min="0" max="100" step="0.1" oninput="seekVideo(this.value)">
-          <div class="time-label" id="timeLabel">0:00 / 0:00</div>
+      </div>
+      <div class="player-controls" id="controls" style="display:none">
+        <!-- Progress bar -->
+        <div class="player-progress-wrap">
+          <div class="player-progress-bg" id="progressBg" onclick="seekByClick(event)">
+            <div class="player-progress-fill" id="progressFill"></div>
+            <div class="player-progress-thumb" id="progressThumb"></div>
+          </div>
+          <div class="player-time" id="timeLabel">0:00 / 0:00</div>
         </div>
-        <div class="vol-wrap">
-          <svg viewBox="0 0 24 24"><polygon points="11,5 6,9 2,9 2,15 6,15 11,19"/><path d="M19.07 4.93a10 10 0 010 14.14"/><path d="M15.54 8.46a5 5 0 010 7.07"/></svg>
-          <input type="range" class="vol-slider" min="0" max="1" step="0.02" value="1" oninput="setVolume(this.value)">
+        <!-- Bottom row -->
+        <div class="player-row">
+          <div class="player-left">
+            <!-- Play/Pause -->
+            <button class="player-btn" id="playPauseBtn" onclick="togglePlay()">
+              <svg id="playIcon" viewBox="0 0 24 24" width="18" height="18"><path d="M5 3l14 9-14 9V3z" fill="currentColor"/></svg>
+            </button>
+            <!-- Skip back 10s -->
+            <button class="player-btn" onclick="skipTime(-10)">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/><text x="12" y="15" text-anchor="middle" font-size="6" fill="currentColor" stroke="none">10</text></svg>
+            </button>
+            <!-- Skip forward 10s -->
+            <button class="player-btn" onclick="skipTime(10)">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/><text x="12" y="15" text-anchor="middle" font-size="6" fill="currentColor" stroke="none">10</text></svg>
+            </button>
+            <!-- Volume -->
+            <div class="player-vol-wrap">
+              <button class="player-btn" onclick="toggleMute()" id="muteBtn">
+                <svg id="volIcon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 010 7.07"/></svg>
+              </button>
+              <input type="range" class="player-vol-slider" id="volSlider" min="0" max="1" step="0.02" value="1" oninput="setVolume(this.value)">
+            </div>
+          </div>
+          <div class="player-right">
+            <!-- Fullscreen chat toggle -->
+            <button class="player-btn" id="chatToggleBtn" onclick="toggleFsChat()" title="Toggle chat" style="display:none">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+            </button>
+            <!-- Fullscreen -->
+            <button class="player-btn" onclick="toggleFullscreen()" id="fsBtn">
+              <svg id="fsIcon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 3H5a2 2 0 00-2 2v3m18 0V5a2 2 0 00-2-2h-3m0 18h3a2 2 0 002-2v-3M3 16v3a2 2 0 002 2h3"/></svg>
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -990,7 +1101,7 @@ function connectWS(){
       sysMsg(i('videoReceived'));
     }
     if(msg.type==='host_left')sysMsg(i('hostLeft'));
-    if(msg.type==='sync'&&!isHost){const v=document.getElementById('videoPlayer');if(!v.src&&!v.srcObject)return;isSyncing=true;if(Math.abs(v.currentTime-msg.time)>0.8)v.currentTime=msg.time;if(msg.playing&&v.paused)v.play();if(!msg.playing&&!v.paused)v.pause();setPlayIcon(!msg.playing);setTimeout(()=>isSyncing=false,300);}
+    if(msg.type==='sync'&&!isHost){const v=document.getElementById('videoPlayer');if(!v.src&&!v.srcObject)return;isSyncing=true;if(Math.abs(v.currentTime-msg.time)>0.8)v.currentTime=msg.time;if(msg.playing&&v.paused)v.play().catch(()=>{});if(!msg.playing&&!v.paused)v.pause();setPlayIcon(!msg.playing);setTimeout(()=>isSyncing=false,300);}
     if(msg.type==='chat')addMsg(msg.name,msg.text,msg.avatar);
     if(msg.type==='friend_status'||msg.type==='friend_request'||msg.type==='auth_ok') handleFriendWsMsg(msg);
   };
@@ -1054,33 +1165,145 @@ function showPlayer(){
   document.getElementById('videoPlayer').style.display='block';
   document.getElementById('uploadZone').style.display='none';
   document.getElementById('waitingScreen').style.display='none';
-  document.getElementById('controls').style.display='flex';
+  document.getElementById('controls').style.display='block';
+  document.getElementById('chatToggleBtn').style.display='flex';
 }
 
 function setupEvents(){
   const v=document.getElementById('videoPlayer');
   v.addEventListener('timeupdate',()=>{
     if(v.duration){
-      document.getElementById('progressBar').value=(v.currentTime/v.duration)*100;
+      const pct=(v.currentTime/v.duration)*100;
+      document.getElementById('progressFill').style.width=pct+'%';
+      document.getElementById('progressThumb').style.left=pct+'%';
       document.getElementById('timeLabel').textContent=`${ft(v.currentTime)} / ${ft(v.duration)}`;
     }
     if(isHost&&!isSyncing)ws.send(JSON.stringify({type:'sync',playing:!v.paused,time:v.currentTime}));
   });
   v.addEventListener('play',()=>{setPlayIcon(false);syncHost();});
   v.addEventListener('pause',()=>{setPlayIcon(true);syncHost();});
+  // Double-click to fullscreen
+  v.addEventListener('dblclick',toggleFullscreen);
+  // Hide controls after 3s in fullscreen
+  let hideTimer;
+  document.getElementById('videoPlayer').parentElement.addEventListener('mousemove',()=>{
+    const va=document.querySelector('.video-area');
+    if(va.classList.contains('fullscreen')){
+      va.classList.add('show-controls');
+      clearTimeout(hideTimer);
+      hideTimer=setTimeout(()=>va.classList.remove('show-controls'),3000);
+    }
+  });
 }
 
 function setPlayIcon(showPlay){
   const path=document.querySelector('#playIcon path');
   if(path) path.setAttribute('d',showPlay
-    ?'M5,3 L19,12 L5,21 Z'
+    ?'M5 3l14 9-14 9V3z'
     :'M6 19h4V5H6v14zm8-14v14h4V5h-4z');
 }
 
 function syncHost(){if(!isHost||isSyncing)return;const v=document.getElementById('videoPlayer');ws.send(JSON.stringify({type:'sync',playing:!v.paused,time:v.currentTime}));}
-function togglePlay(){const v=document.getElementById('videoPlayer');if(!v.src&&!v.srcObject)return;v.paused?v.play():v.pause();}
-function seekVideo(val){const v=document.getElementById('videoPlayer');if(!v.duration)return;v.currentTime=(val/100)*v.duration;syncHost();}
-function setVolume(val){document.getElementById('videoPlayer').volume=val;}
+
+function togglePlay(){
+  const v=document.getElementById('videoPlayer');
+  if(!v.src&&!v.srcObject)return;
+  v.paused?v.play():v.pause();
+}
+
+function seekByClick(e){
+  const v=document.getElementById('videoPlayer');
+  if(!v.duration)return;
+  const bar=e.currentTarget;
+  const rect=bar.getBoundingClientRect();
+  const pct=Math.max(0,Math.min(1,(e.clientX-rect.left)/rect.width));
+  v.currentTime=pct*v.duration;
+  syncHost();
+}
+
+function skipTime(sec){
+  const v=document.getElementById('videoPlayer');
+  if(!v.duration)return;
+  v.currentTime=Math.max(0,Math.min(v.duration,v.currentTime+sec));
+  syncHost();
+}
+
+function setVolume(val){
+  const v=document.getElementById('videoPlayer');
+  v.volume=val;
+  updateVolIcon(val);
+}
+
+function toggleMute(){
+  const v=document.getElementById('videoPlayer');
+  const sl=document.getElementById('volSlider');
+  if(v.muted||v.volume===0){
+    v.muted=false;
+    v.volume=sl._lastVol||0.8;
+    sl.value=v.volume;
+  } else {
+    sl._lastVol=v.volume;
+    v.muted=true;
+    sl.value=0;
+  }
+  updateVolIcon(v.muted?0:v.volume);
+}
+
+function updateVolIcon(vol){
+  const icon=document.getElementById('volIcon');
+  if(!icon)return;
+  if(vol<=0||vol===undefined) icon.innerHTML='<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/>';
+  else if(vol<0.5) icon.innerHTML='<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 010 7.07"/>';
+  else icon.innerHTML='<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 010 14.14"/><path d="M15.54 8.46a5 5 0 010 7.07"/>';
+}
+
+// ── FULLSCREEN ──
+let isFsChat=false;
+
+function toggleFullscreen(){
+  const va=document.querySelector('.video-area');
+  const isFs=va.classList.contains('fullscreen');
+  if(!isFs){
+    va.classList.add('fullscreen','show-controls');
+    document.getElementById('fsIcon').innerHTML='<path d="M8 3v3a2 2 0 01-2 2H3m18 0h-3a2 2 0 01-2-2V3m0 18v-3a2 2 0 012-2h3M3 16h3a2 2 0 012 2v3"/>';
+    setTimeout(()=>va.classList.remove('show-controls'),3000);
+  } else {
+    va.classList.remove('fullscreen','show-controls');
+    document.getElementById('fsIcon').innerHTML='<path d="M8 3H5a2 2 0 00-2 2v3m18 0V5a2 2 0 00-2-2h-3m0 18h3a2 2 0 002-2v-3M3 16v3a2 2 0 002 2h3"/>';
+    // Restore fs chat state
+    if(isFsChat){ document.getElementById('fsChat').classList.remove('show'); isFsChat=false; }
+  }
+}
+
+function toggleFsChat(){
+  isFsChat=!isFsChat;
+  document.getElementById('fsChat').classList.toggle('show',isFsChat);
+  // Mirror messages from main chat
+  if(isFsChat){
+    const src=document.getElementById('messages');
+    const dst=document.getElementById('fsChatMessages');
+    dst.innerHTML=src.innerHTML;
+    dst.scrollTop=dst.scrollHeight;
+  }
+}
+
+function sendFsChat(){
+  const inp=document.getElementById('fsChatInput');
+  const txt=inp.value.trim();if(!txt||!ws)return;
+  ws.send(JSON.stringify({type:'chat',name:myName,text:txt}));
+  inp.value='';
+}
+
+// Sync messages to fs chat when in fullscreen
+function syncFsChat(){
+  if(!isFsChat)return;
+  const src=document.getElementById('messages');
+  const dst=document.getElementById('fsChatMessages');
+  dst.innerHTML=src.innerHTML;
+  dst.scrollTop=dst.scrollHeight;
+}
+
+
 
 function p2pShow(t){document.getElementById('p2pStatusText').textContent=t;document.getElementById('p2pStatus').classList.add('show');}
 function p2pHide(){document.getElementById('p2pStatus').classList.remove('show');}
@@ -1092,6 +1315,7 @@ function addMsg(author,text,avatar){
   const av=avatar?`<span style="margin-right:.3rem">${esc(avatar)}</span>`:'';
   d.innerHTML=`<div class="msg-author">${av}${esc(author)}</div><div class="msg-text">${esc(text)}</div>`;
   m.appendChild(d);m.scrollTop=m.scrollHeight;
+  syncFsChat();
 }
 
 function sysMsg(text){
