@@ -4,9 +4,11 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Watch Together</title>
-<link rel="icon" type="image/x-icon" href="/favicon.ico">
-<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
-<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
+<link rel="icon" type="image/x-icon" href="/favicon.ico?v=2">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png?v=2">
+<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png?v=2">
+<link rel="apple-touch-icon" href="/favicon-32.png?v=2">
+<link rel="shortcut icon" href="/favicon.ico?v=2">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@300;400;700&family=Noto+Sans+JP:wght@300;400&family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300&display=swap" rel="stylesheet">
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -665,7 +667,9 @@ body {
       <div class="room-badge">
         <div class="room-dot"></div>
         <span id="roomCodeDisplay">------</span>
-        <button class="room-copy-btn" onclick="copyRoomLink()" title="Copy invite link"><svg viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></button>
+      </div>
+      <div class="icon-btn" onclick="copyRoomLink()" id="roomCopyBtn" title="Copy invite link">
+        <svg viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
       </div>
     </div>
     <div class="topbar-right">
@@ -1109,8 +1113,8 @@ function sendChat(){
 function copyRoomLink(){
   if(!roomId) return;
   navigator.clipboard.writeText(`${location.origin}?room=${roomId}`);
-  const btn = document.querySelector('.room-copy-btn');
-  if(btn){ btn.style.color='var(--accent)'; setTimeout(()=>btn.style.color='',1500); }
+  const btn = document.getElementById('roomCopyBtn');
+  if(btn){ btn.style.color='var(--accent)'; btn.style.borderColor='var(--accent)'; setTimeout(()=>{ btn.style.color=''; btn.style.borderColor=''; },1500); }
 }
 
 function openShare(){
