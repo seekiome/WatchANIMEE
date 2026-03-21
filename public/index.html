@@ -459,67 +459,6 @@ body {
 .modal-close:hover { border-color: var(--border-accent); color: var(--accent2); }
 @media(max-width:700px){ .sidebar{display:none} }
 
-/* ── AUTH SCREEN ── */
-#authScreen {
-  min-height: 100vh; display: flex; flex-direction: column;
-  align-items: center; justify-content: center;
-  padding: 2rem; position: relative; z-index: 2;
-}
-.auth-logo {
-  font-family: 'Noto Serif JP', serif;
-  font-size: clamp(1.8rem,4vw,2.6rem); font-weight: 300;
-  color: var(--logo-color); letter-spacing: .12em;
-  margin-bottom: 2rem; text-align: center;
-}
-.auth-card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 20px; padding: 2rem;
-  width: 100%; max-width: 360px;
-  backdrop-filter: blur(12px);
-  box-shadow: 0 8px 40px rgba(0,0,0,0.08);
-}
-.auth-tabs {
-  display: flex; gap: .4rem;
-  background: var(--tab-bg);
-  padding: .3rem; border-radius: 12px; margin-bottom: 1.5rem;
-}
-.auth-tab {
-  flex: 1; padding: .55rem; border: none; border-radius: 9px;
-  background: transparent; color: var(--text-muted);
-  font-family: 'Cormorant Garamond', serif;
-  font-size: .9rem; cursor: pointer; transition: all .2s;
-}
-.auth-tab.active { background: var(--btn-active-bg); border: 1px solid var(--border-accent); color: var(--logo-color); }
-
-/* Avatar picker */
-.avatar-label { display: block; font-size: .68rem; color: var(--text-muted); letter-spacing: .1em; text-transform: uppercase; font-family: monospace; margin-bottom: .5rem; }
-.avatar-grid {
-  display: flex; flex-wrap: wrap; gap: .4rem;
-  margin-bottom: 1rem;
-}
-.avatar-opt {
-  width: 36px; height: 36px;
-  border: 1.5px solid var(--border);
-  border-radius: 50%; background: var(--surface2);
-  display: flex; align-items: center; justify-content: center;
-  font-size: 1.1rem; cursor: pointer; transition: all .2s;
-}
-.avatar-opt.selected { border-color: var(--accent); background: var(--btn-active-bg); transform: scale(1.1); }
-.avatar-opt:hover { border-color: var(--border-accent); }
-.avatar-upload-opt { color: var(--text-muted); }
-.avatar-upload-opt:hover { color: var(--accent); }
-
-.auth-error { font-size: .75rem; color: var(--accent); font-family: monospace; margin-bottom: .75rem; display: none; }
-.auth-error.show { display: block; }
-
-.auth-skip {
-  text-align: center; margin-top: 1rem;
-  font-size: .75rem; color: var(--text-faint);
-  font-family: monospace; cursor: pointer; transition: color .2s;
-}
-.auth-skip:hover { color: var(--text-muted); }
-
 /* ── FRIENDS PANEL ── */
 .friends-btn {
   width: 32px; height: 32px;
@@ -660,49 +599,6 @@ body {
   </div>
 </div>
 
-<!-- AUTH SCREEN -->
-<div id="authScreen">
-  <div class="auth-logo">Watch Together</div>
-  <div class="auth-card">
-    <div class="auth-tabs">
-      <button class="auth-tab active" onclick="switchAuthTab('login')" id="authTabLogin">Sign in</button>
-      <button class="auth-tab" onclick="switchAuthTab('register')" id="authTabReg">Register</button>
-    </div>
-
-    <div id="authLoginForm">
-      <label class="field-label">Username</label>
-      <input type="text" class="field-input" id="loginUsername" placeholder="Username…" autocomplete="username">
-      <label class="field-label">Password</label>
-      <input type="password" class="field-input" id="loginPassword" placeholder="Password…" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
-      <div class="auth-error" id="loginError"></div>
-      <button class="lobby-btn" onclick="doLogin()">
-        <span id="btnSignInText">Sign in</span>
-        <svg width="20" height="8" viewBox="0 0 28 8" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><line x1="0" y1="4" x2="23" y2="4"/><polyline points="19 1 24 4 19 7"/></svg>
-      </button>
-    </div>
-
-    <div id="authRegForm" style="display:none">
-      <label class="field-label">Username</label>
-      <input type="text" class="field-input" id="regUsername" placeholder="Username…" autocomplete="username">
-      <label class="field-label">Password</label>
-      <input type="password" class="field-input" id="regPassword" placeholder="Password…" autocomplete="new-password">
-      <label class="avatar-label">Pick your avatar</label>
-      <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:.75rem">
-        <div id="avatarPreview" style="width:52px;height:52px;border-radius:50%;border:1.5px solid var(--border-accent);background:var(--surface2);display:flex;align-items:center;justify-content:center;font-size:1.6rem;flex-shrink:0;">🌸</div>
-        <div style="font-size:.72rem;color:var(--text-faint);font-family:monospace;line-height:1.5">Choose emoji below<br>or upload a photo</div>
-      </div>
-      <div class="avatar-grid" id="avatarGrid"></div>
-      <input type="file" id="avatarFileInput" accept="image/*" style="display:none" onchange="handleAvatarImage(this)">
-      <div class="auth-error" id="regError"></div>
-      <button class="lobby-btn" onclick="doRegister()">
-        <span id="btnRegText">Create account</span>
-        <svg width="20" height="8" viewBox="0 0 28 8" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><line x1="0" y1="4" x2="23" y2="4"/><polyline points="19 1 24 4 19 7"/></svg>
-      </button>
-    </div>
-
-    <div class="auth-skip" onclick="skipAuth()">Continue without account →</div>
-  </div>
-</div>
 
 <!-- FRIENDS PANEL -->
 <div class="friends-panel" id="friendsPanel">
@@ -967,16 +863,6 @@ function setLang(l){
   document.getElementById('btnCreateText').textContent=t.btnCreate;
   document.getElementById('btnJoinText').textContent=t.btnJoin;
 
-  // Auth screen
-  document.getElementById('authTabLogin').textContent=t.authSignIn||'Sign in';
-  const bsi=document.getElementById('btnSignInText');if(bsi)bsi.textContent=t.authSignIn||'Sign in';
-  const brg=document.getElementById('btnRegText');if(brg)brg.textContent=t.authRegister||'Create account';
-  document.getElementById('authTabReg').textContent=t.authRegister||'Register';
-  document.getElementById('loginUsername').placeholder=t.hostNamePh;
-  document.getElementById('loginPassword').placeholder=t.authPassword||'Password…';
-  document.getElementById('regUsername').placeholder=t.hostNamePh;
-  document.getElementById('regPassword').placeholder=t.authPassword||'Password…';
-
   // App
   document.getElementById('uploadTitle').textContent=t.uploadTitle;
   document.getElementById('chatLabel').textContent=t.chatLabel;
@@ -1010,19 +896,14 @@ function switchTab(tab){
   document.getElementById('joinTab').style.display=tab==='join'?'block':'none';
 }
 
-window.addEventListener('load',async()=>{
+window.addEventListener('load',()=>{
   const p=new URLSearchParams(location.search);
   if(p.get('room')){document.getElementById('joinCode').value=p.get('room');switchTab('join');}
   const savedTheme=localStorage.getItem('wt-theme')||'dark';
   setTheme(savedTheme);
   setLang('en');
   spawnPetals();
-  initAvatarGrid();
-  // Show auth or auto-login
-  document.getElementById('lobby').style.display='none';
-  const autoLogged=await tryAutoLogin();
-  if(autoLogged) showLobbyScreen();
-  else document.getElementById('authScreen').style.display='flex';
+  document.getElementById('lobby').style.display='flex';
 });
 
 function spawnPetals(){
@@ -1039,8 +920,8 @@ function spawnPetals(){
   setInterval(c,600);
 }
 
-function createRoom(){const n=document.getElementById('hostName').value.trim()||authUser?.username;if(!n)return;myName=n;isHost=true;roomId=rid();startApp();}
-function joinRoom(){const n=document.getElementById('joinName').value.trim()||authUser?.username;const c=document.getElementById('joinCode').value.trim().toUpperCase();if(!n||!c)return;myName=n;isHost=false;roomId=c;startApp();}
+function createRoom(){const n=document.getElementById('hostName').value.trim();if(!n)return;myName=n;isHost=true;roomId=rid();startApp();}
+function joinRoom(){const n=document.getElementById('joinName').value.trim();const c=document.getElementById('joinCode').value.trim().toUpperCase();if(!n||!c)return;myName=n;isHost=false;roomId=c;startApp();}
 
 function goHome(){
   if(ws){ws.close();ws=null;}
@@ -1070,8 +951,6 @@ function connectWS(){
   ws=new WebSocket(`${proto}://${location.host}`);
   myClientId=rid(8);
   ws.onopen=()=>{
-    // Auth with token if logged in
-    if(authToken) ws.send(JSON.stringify({type:'auth',token:authToken}));
     ws.send(JSON.stringify({type:'join',roomId,isHost,clientId:myClientId}));
     sysMsg(i('joined',myName,isHost));
   };
@@ -1221,8 +1100,7 @@ function sysMsg(text){
 function sendChat(){
   const inp=document.getElementById('chatInput');
   const txt=inp.value.trim();if(!txt||!ws)return;
-  const avatar=authUser?.avatar||'';
-  ws.send(JSON.stringify({type:'chat',name:myName,text:txt,avatar}));inp.value='';
+  ws.send(JSON.stringify({type:'chat',name:myName,text:txt}));inp.value='';
 }
 
 function openShare(){
@@ -1404,160 +1282,14 @@ function copyLink(){
   b.textContent=i('copyDone');setTimeout(()=>b.textContent=i('copyBtn'),2000);
 }
 
-// ── AUTH ──
-const AVATARS = ['🌸','🎋','🦊','🐼','🌙','⭐','🎭','🎸','🍵','🐉','🦋','🌺','🎮','🌊','🔥','🌿'];
-let authToken = null, authUser = null, selectedAvatar = AVATARS[0];
-
-function setAvatarEl(el, avatar){
-  if(!el) return;
-  if(avatar && avatar.startsWith('data:')){
-    el.textContent = '';
-    el.style.backgroundImage = `url(${avatar})`;
-    el.style.backgroundSize = 'cover';
-    el.style.backgroundPosition = 'center';
-    el.style.fontSize = '0';
-  } else {
-    el.textContent = avatar || '🌸';
-    el.style.backgroundImage = '';
-    el.style.fontSize = '';
-  }
-}
-
-function initAvatarGrid(){
-  const grid = document.getElementById('avatarGrid');
-  grid.innerHTML = '';
-  AVATARS.forEach(a => {
-    const el = document.createElement('div');
-    el.className = 'avatar-opt' + (a === selectedAvatar ? ' selected' : '');
-    el.textContent = a;
-    el.onclick = () => {
-      selectedAvatar = a;
-      document.querySelectorAll('.avatar-opt').forEach(x => x.classList.remove('selected'));
-      el.classList.add('selected');
-      document.getElementById('avatarPreview').textContent = a;
-      document.getElementById('avatarPreview').style.fontSize = '1.6rem';
-      document.getElementById('avatarPreview').style.backgroundImage = '';
-    };
-    grid.appendChild(el);
-  });
-
-  // Image upload option
-  const uploadEl = document.createElement('div');
-  uploadEl.className = 'avatar-opt avatar-upload-opt';
-  uploadEl.title = 'Upload image';
-  uploadEl.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>';
-  uploadEl.onclick = () => document.getElementById('avatarFileInput').click();
-  grid.appendChild(uploadEl);
-}
-
-function handleAvatarImage(input){
-  const file = input.files[0];
-  if(!file) return;
-  const reader = new FileReader();
-  reader.onload = (e) => {
-    selectedAvatar = e.target.result; // base64
-    document.querySelectorAll('.avatar-opt').forEach(x => x.classList.remove('selected'));
-    const prev = document.getElementById('avatarPreview');
-    prev.textContent = '';
-    prev.style.backgroundImage = `url(${e.target.result})`;
-    prev.style.backgroundSize = 'cover';
-    prev.style.backgroundPosition = 'center';
-    prev.style.fontSize = '0';
-  };
-  reader.readAsDataURL(file);
-}
-
-function switchAuthTab(tab){
-  document.getElementById('authTabLogin').classList.toggle('active', tab === 'login');
-  document.getElementById('authTabReg').classList.toggle('active', tab === 'register');
-  document.getElementById('authLoginForm').style.display = tab === 'login' ? 'block' : 'none';
-  document.getElementById('authRegForm').style.display = tab === 'register' ? 'block' : 'none';
-}
-
-async function doLogin(){
-  const username = document.getElementById('loginUsername').value.trim();
-  const password = document.getElementById('loginPassword').value;
-  const errEl = document.getElementById('loginError');
-  errEl.classList.remove('show');
-  if(!username || !password){ errEl.textContent = 'Fill all fields'; errEl.classList.add('show'); return; }
-  try {
-    const r = await fetch('/api/login', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({username, password}) });
-    const data = await r.json();
-    if(!r.ok){ errEl.textContent = data.error || 'Login failed'; errEl.classList.add('show'); return; }
-    onAuthSuccess(data);
-  } catch(e) { errEl.textContent = 'Network error'; errEl.classList.add('show'); }
-}
-
-async function doRegister(){
-  const username = document.getElementById('regUsername').value.trim();
-  const password = document.getElementById('regPassword').value;
-  const errEl = document.getElementById('regError');
-  errEl.classList.remove('show');
-  if(!username || !password){ errEl.textContent = 'Fill all fields'; errEl.classList.add('show'); return; }
-  try {
-    const r = await fetch('/api/register', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({username, password, avatar: selectedAvatar}) });
-    const data = await r.json();
-    if(!r.ok){ errEl.textContent = data.error || 'Registration failed'; errEl.classList.add('show'); return; }
-    onAuthSuccess(data);
-  } catch(e) { errEl.textContent = 'Network error'; errEl.classList.add('show'); }
-}
-
-function onAuthSuccess(data){
-  authToken = data.token;
-  authUser = { username: data.username, avatar: data.avatar };
-  localStorage.setItem('wt_token', data.token);
-  localStorage.setItem('wt_user', JSON.stringify(authUser));
-  showLobbyScreen();
-  loadFriends();
-  document.getElementById('friendsBtn').style.display = 'flex';
-  document.getElementById('userChip').style.display = 'flex';
-  setAvatarEl(document.getElementById('userChipAvatar'), data.avatar);
-  document.getElementById('userChipName').textContent = data.username;
-}
-
-function skipAuth(){
-  authToken = null; authUser = null;
-  showLobbyScreen();
-}
-
-function showLobbyScreen(){
-  document.getElementById('authScreen').style.display = 'none';
-  document.getElementById('lobby').style.display = 'flex';
-}
-
-async function tryAutoLogin(){
-  const saved = localStorage.getItem('wt_token');
-  const savedUser = localStorage.getItem('wt_user');
-  if(!saved) return false;
-  try {
-    const r = await fetch('/api/me', { headers:{ Authorization: `Bearer ${saved}` } });
-    if(!r.ok){ localStorage.removeItem('wt_token'); localStorage.removeItem('wt_user'); return false; }
-    const data = await r.json();
-    authToken = saved;
-    authUser = { username: data.username, avatar: data.avatar };
-    document.getElementById('friendsBtn').style.display = 'flex';
-    document.getElementById('userChip').style.display = 'flex';
-    setAvatarEl(document.getElementById('userChipAvatar'), data.avatar);
-    document.getElementById('userChipName').textContent = data.username;
-    renderFriends(data.friends || [], data.friendRequests || []);
-    return true;
-  } catch { return false; }
-}
 
 // ── FRIENDS ──
+let authToken = null, authUser = null;
 let friendsPanelOpen = false;
 
 function toggleFriends(){
-  if(!authToken){
-    // If not logged in, go back to auth
-    if(document.getElementById('app').style.display !== 'none'){
-      sysMsg('Sign in to use friends');
-    }
-    return;
-  }
   friendsPanelOpen = !friendsPanelOpen;
   document.getElementById('friendsPanel').classList.toggle('open', friendsPanelOpen);
-  if(friendsPanelOpen) loadFriends();
 }
 
 async function loadFriends(){
@@ -1664,12 +1396,7 @@ function inviteFriendToRoom(username){
   const link = `${location.origin}?room=${roomId}`;
   // Send via WS as a chat system message targeted to friend
   if(ws && ws.readyState === 1){
-    ws.send(JSON.stringify({
-      type: 'chat',
-      name: authUser?.username || myName,
-      text: `🎬 Invited ${username} — Room: ${roomId}`,
-      avatar: authUser?.avatar || ''
-    }));
+    ws.send(JSON.stringify({type:'chat',name:myName,text:`🎬 Invited ${username} — Room: ${roomId}`}));
   }
   // Also copy link
   navigator.clipboard.writeText(link).catch(()=>{});
@@ -1685,7 +1412,7 @@ function addSysIfInRoom(text){
 function handleFriendWsMsg(msg){
   if(msg.type === 'friend_status') loadFriends();
   if(msg.type === 'friend_request'){ loadFriends(); document.getElementById('friendsNotif').classList.add('show'); }
-  if(msg.type === 'auth_ok' && authUser) myName = myName || authUser.username;
+
 }
 
 </script>
