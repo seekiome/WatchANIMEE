@@ -938,7 +938,6 @@ function sendChat() {
   const text = input.value.trim();
   if (!text || !ws) return;
   ws.send(JSON.stringify({ type: 'chat', name: myName, text }));
-  addMsg(myName, text);
   input.value = '';
 }
 
