@@ -212,9 +212,9 @@ body {
   display: flex; align-items: center; justify-content: center;
   gap: .5rem; line-height: 1;
 }
-.lobby-btn span { line-height: 1; display: flex; align-items: center; }
+.lobby-btn span { line-height: 1; }
 .lobby-btn:hover { background: var(--btn-bg-hover); transform: translateY(-1px); }
-.lobby-btn svg { display: block; flex-shrink: 0; width: 14px; height: 14px; }
+.lobby-btn svg { flex-shrink: 0; }
 
 
 /* APP */
@@ -244,9 +244,20 @@ body {
 .room-badge {
   display: flex; align-items: center; gap: .45rem;
   background: var(--badge-bg); border: 1px solid var(--border-accent);
-  border-radius: 20px; padding: .3rem .85rem;
-  font-family: monospace; font-size: .76rem; color: var(--accent2);
+  border-radius: 20px; padding: .3rem .5rem .3rem .85rem;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: .76rem; color: var(--text-muted);
 }
+.room-copy-btn {
+  width: 22px; height: 22px;
+  border: none; background: transparent;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; color: var(--text-faint);
+  border-radius: 50%; transition: all .15s;
+  padding: 0;
+}
+.room-copy-btn:hover { color: var(--accent); background: var(--btn-bg); }
+.room-copy-btn svg { width: 11px; height: 11px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .room-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--accent); animation: glow 2s infinite; }
 @keyframes glow { 0%,100%{opacity:1}50%{opacity:.3} }
 .topbar-right { display: flex; align-items: center; gap: .6rem; }
@@ -631,14 +642,14 @@ body {
     <div id="hostTab">
       <label class="field-label" id="labelNameHost">Your name</label>
       <input type="text" class="field-input" id="hostName" maxlength="24">
-      <button class="lobby-btn" onclick="createRoom()" id="btnCreate"><span id="btnCreateText">Create room</span><svg width="20" height="8" viewBox="0 0 28 8" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><line x1="0" y1="4" x2="23" y2="4"/><polyline points="19 1 24 4 19 7"/></svg></button>
+      <button class="lobby-btn" onclick="createRoom()" id="btnCreate"><span id="btnCreateText">Create room</span><svg width="1em" height="1em" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:middle"><path d="M3 8h9M8 4l4 4-4 4"/></svg></button>
     </div>
     <div id="joinTab" style="display:none">
       <label class="field-label" id="labelNameJoin">Your name</label>
       <input type="text" class="field-input" id="joinName" maxlength="24">
       <label class="field-label" id="labelCode">Room code</label>
       <input type="text" class="field-input" id="joinCode" maxlength="8" style="text-transform:uppercase;letter-spacing:.12em;font-family:monospace">
-      <button class="lobby-btn" onclick="joinRoom()" id="btnJoin"><span id="btnJoinText">Enter room</span><svg width="20" height="8" viewBox="0 0 28 8" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><line x1="0" y1="4" x2="23" y2="4"/><polyline points="19 1 24 4 19 7"/></svg></button>
+      <button class="lobby-btn" onclick="joinRoom()" id="btnJoin"><span id="btnJoinText">Enter room</span><svg width="1em" height="1em" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;vertical-align:middle"><path d="M3 8h9M8 4l4 4-4 4"/></svg></button>
     </div>
   </div>
 </div>
@@ -654,6 +665,7 @@ body {
       <div class="room-badge">
         <div class="room-dot"></div>
         <span id="roomCodeDisplay">------</span>
+        <button class="room-copy-btn" onclick="copyRoomLink()" title="Copy invite link"><svg viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></button>
       </div>
     </div>
     <div class="topbar-right">
@@ -684,6 +696,16 @@ body {
         <div class="upload-title" id="uploadTitle">Select video</div>
         <div class="upload-sub">MP4 · MKV · AVI · MOV · WebM</div>
         <input type="file" id="fileInput" accept="video/*" onchange="selectVideo(this)">
+      </div>
+
+      <!-- Upload progress -->
+      <div id="uploadProgressWrap" style="display:none;position:absolute;bottom:0;left:0;right:0;padding:1.25rem 1.5rem;background:var(--surface4);border-top:1px solid var(--border2);">
+        <div style="display:flex;justify-content:space-between;margin-bottom:.5rem;font-family:monospace;font-size:.72rem;color:var(--text-muted);">
+          <span>Uploading…</span><span id="uploadPct">0%</span>
+        </div>
+        <div style="height:3px;background:var(--progress-bg);border-radius:2px;overflow:hidden;">
+          <div id="uploadFill" style="height:100%;width:0%;background:var(--accent);border-radius:2px;transition:width .2s;"></div>
+        </div>
       </div>
       <div class="waiting-screen" id="waitingScreen" style="display:none">
         <div class="waiting-spinner"></div>
@@ -883,8 +905,6 @@ function setLang(l){
 
 // STATE
 let ws,roomId,myName,myClientId,isHost=false,isSyncing=false,localFile=null;
-const peers=new Map();
-const ICE=[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'}];
 
 function rid(n=6){return Math.random().toString(36).substr(2,n).toUpperCase();}
 function ft(s){s=Math.floor(s||0);const m=Math.floor(s/60),sec=s%60;return`${m}:${sec.toString().padStart(2,'0')}`;}
@@ -925,7 +945,6 @@ function joinRoom(){const n=document.getElementById('joinName').value.trim();con
 
 function goHome(){
   if(ws){ws.close();ws=null;}
-  peers.forEach(pc=>pc.close());peers.clear();
   const v=document.getElementById('videoPlayer');
   v.src='';v.srcObject=null;v.style.display='none';
   document.getElementById('controls').style.display='none';
@@ -956,14 +975,21 @@ function connectWS(){
   };
   ws.onmessage=async(e)=>{
     const msg=JSON.parse(e.data);
-    if(msg.type==='init'){document.getElementById('viewersCount').textContent=msg.viewers;if(msg.hasVideo&&!isHost)document.getElementById('waitingText').textContent=i('waitConn');}
+    if(msg.type==='init'){
+      document.getElementById('viewersCount').textContent=msg.viewers;
+      if(msg.hasVideo&&!isHost&&msg.videoFile){
+        document.getElementById('waitingText').textContent=i('waitRecv');
+        loadVideo(`/video/${msg.videoFile}`,msg.state);
+        sysMsg(i('videoReceived'));
+      }
+    }
     if(msg.type==='viewers')document.getElementById('viewersCount').textContent=msg.count;
-    if(msg.type==='video_ready'&&!isHost){document.getElementById('waitingText').textContent=i('waitRecv');p2pShow(i('p2pConn'));}
+    if(msg.type==='video_ready'&&!isHost){
+      document.getElementById('waitingText').textContent=i('waitRecv');
+      loadVideo(`/video/${msg.filename}`,null);
+      sysMsg(i('videoReceived'));
+    }
     if(msg.type==='host_left')sysMsg(i('hostLeft'));
-    if(msg.type==='peer_request'&&isHost)await hostOffer(msg.clientId);
-    if(msg.type==='offer'&&!isHost)await viewerAnswer(msg.offer);
-    if(msg.type==='answer'&&isHost){const pc=peers.get(msg.clientId);if(pc)await pc.setRemoteDescription(new RTCSessionDescription(msg.answer));}
-    if(msg.type==='ice'){const pc=isHost?peers.get(msg.clientId):peers.get('host');if(pc&&msg.candidate){try{await pc.addIceCandidate(new RTCIceCandidate(msg.candidate));}catch(e){}}}
     if(msg.type==='sync'&&!isHost){const v=document.getElementById('videoPlayer');if(!v.src&&!v.srcObject)return;isSyncing=true;if(Math.abs(v.currentTime-msg.time)>0.8)v.currentTime=msg.time;if(msg.playing&&v.paused)v.play();if(!msg.playing&&!v.paused)v.pause();setPlayIcon(!msg.playing);setTimeout(()=>isSyncing=false,300);}
     if(msg.type==='chat')addMsg(msg.name,msg.text,msg.avatar);
     if(msg.type==='friend_status'||msg.type==='friend_request'||msg.type==='auth_ok') handleFriendWsMsg(msg);
@@ -971,78 +997,55 @@ function connectWS(){
   ws.onclose=()=>sysMsg(i('disconnected'));
 }
 
-async function hostOffer(clientId){
-  if(!localFile)return;
-  const pc=new RTCPeerConnection({iceServers:ICE});peers.set(clientId,pc);
-  const mainVideo=document.getElementById('videoPlayer');
-
-  // captureStream directly from playing main video
-  let stream=null;
-  const wasP=mainVideo.paused;
-  try{
-    if(!wasP||mainVideo.readyState>=2){
-      if(wasP){ await mainVideo.play().catch(()=>{}); await new Promise(r=>setTimeout(r,100)); }
-      if(mainVideo.captureStream) stream=mainVideo.captureStream();
-      else if(mainVideo.mozCaptureStream) stream=mainVideo.mozCaptureStream();
-      if(wasP) mainVideo.pause();
-    }
-  }catch(e){ sysMsg('captureStream error: '+e.message); }
-
-  if(!stream||!stream.getTracks().length){
-    sysMsg(i('streamErr'));return;
-  }
-
-  stream.getTracks().forEach(t=>pc.addTrack(t,stream));
-  pc.onicecandidate=({candidate})=>{if(candidate)ws.send(JSON.stringify({type:'ice',candidate,targetId:clientId,toHost:false}));};
-  pc.onconnectionstatechange=()=>{
-    if(pc.connectionState==='connected')sysMsg(i('viewerP2P'));
-    if(pc.connectionState==='failed')sysMsg(i('p2pFailed'));
-  };
-  const offer=await pc.createOffer();
-  await pc.setLocalDescription(offer);
-  ws.send(JSON.stringify({type:'offer',offer:pc.localDescription,targetId:clientId}));
-}
-
-async function viewerAnswer(offer){
-  const pc=new RTCPeerConnection({iceServers:ICE});peers.set('host',pc);
-  pc.onicecandidate=({candidate})=>{if(candidate)ws.send(JSON.stringify({type:'ice',candidate,toHost:true}));};
-  pc.ontrack=({streams})=>{
-    const v=document.getElementById('videoPlayer');
-    // Use srcObject for live P2P stream
-    if(v.src){URL.revokeObjectURL(v.src);v.removeAttribute('src');}
-    v.srcObject=streams[0];
-    showPlayer();
-    // Setup sync events (no local file for viewer)
-    v.addEventListener('timeupdate',()=>{
-      if(v.duration){
-        document.getElementById('progressBar').value=(v.currentTime/v.duration)*100;
-        document.getElementById('timeLabel').textContent=`${ft(v.currentTime)} / ${ft(v.duration)}`;
-      }
-    });
-    v.addEventListener('play',()=>setPlayIcon(false));
-    v.addEventListener('pause',()=>setPlayIcon(true));
-    v.play().catch(()=>{
-      // Autoplay blocked — show play button
-      showPlayer();
-    });
-    p2pShow(i('p2pDone'));setTimeout(()=>p2pHide(),3000);
-    sysMsg(i('videoReceived'));
-  };
-  pc.onconnectionstatechange=()=>{
-    if(pc.connectionState==='failed')p2pShow(i('p2pFail'));
-    if(pc.connectionState==='disconnected')sysMsg(i('p2pFail'));
-  };
-  await pc.setRemoteDescription(new RTCSessionDescription(offer));
-  const ans=await pc.createAnswer();await pc.setLocalDescription(ans);
-  ws.send(JSON.stringify({type:'answer',answer:pc.localDescription}));
-}
-
 function selectVideo(input){
   const f=input.files[0];if(!f)return;localFile=f;
-  const v=document.getElementById('videoPlayer');
-  v.src=URL.createObjectURL(f);
-  v.addEventListener('loadedmetadata',()=>{
-    showPlayer();ws.send(JSON.stringify({type:'video_ready'}));sysMsg(i('videoSelected'));
+  uploadVideo(f);
+}
+
+async function uploadVideo(file){
+  document.getElementById('uploadZone').style.display='none';
+  document.getElementById('uploadProgressWrap').style.display='block';
+
+  const formData=new FormData();
+  formData.append('video',file);
+
+  const xhr=new XMLHttpRequest();
+  xhr.open('POST',`/upload/${roomId}`);
+
+  xhr.upload.onprogress=(e)=>{
+    if(e.lengthComputable){
+      const pct=Math.round((e.loaded/e.total)*100);
+      document.getElementById('uploadPct').textContent=pct+'%';
+      document.getElementById('uploadFill').style.width=pct+'%';
+    }
+  };
+
+  xhr.onload=()=>{
+    document.getElementById('uploadProgressWrap').style.display='none';
+    const res=JSON.parse(xhr.responseText);
+    loadVideo(`/video/${res.filename}`);
+    ws.send(JSON.stringify({type:'video_ready',filename:res.filename}));
+    sysMsg(i('videoSelected'));
+  };
+
+  xhr.onerror=()=>{
+    document.getElementById('uploadProgressWrap').style.display='none';
+    document.getElementById('uploadZone').style.display='flex';
+    sysMsg('Upload failed');
+  };
+
+  xhr.send(formData);
+}
+
+function loadVideo(src,state){
+  const video=document.getElementById('videoPlayer');
+  video.src=src;
+  video.addEventListener('loadedmetadata',()=>{
+    showPlayer();
+    if(state){
+      video.currentTime=state.time||0;
+      if(state.playing) video.play().catch(()=>{});
+    }
   },{once:true});
   setupEvents();
 }
@@ -1101,6 +1104,13 @@ function sendChat(){
   const inp=document.getElementById('chatInput');
   const txt=inp.value.trim();if(!txt||!ws)return;
   ws.send(JSON.stringify({type:'chat',name:myName,text:txt}));inp.value='';
+}
+
+function copyRoomLink(){
+  if(!roomId) return;
+  navigator.clipboard.writeText(`${location.origin}?room=${roomId}`);
+  const btn = document.querySelector('.room-copy-btn');
+  if(btn){ btn.style.color='var(--accent)'; setTimeout(()=>btn.style.color='',1500); }
 }
 
 function openShare(){
