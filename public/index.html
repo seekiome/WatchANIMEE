@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>WatchTogether</title>
+<title>Watch Together</title>
 <link rel="icon" type="image/x-icon" href="/favicon.ico">
 <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
 <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
@@ -209,30 +209,11 @@ body {
   font-size: 1rem; letter-spacing: .1em;
   cursor: pointer; transition: all .2s;
   display: flex; align-items: center; justify-content: center;
-  gap: .5rem; line-height: 1;
+  gap: .6rem; line-height: 1; vertical-align: middle;
 }
 .lobby-btn:hover { background: var(--btn-bg-hover); transform: translateY(-1px); }
-.lobby-btn svg { display: block; flex-shrink: 0; }
+.lobby-btn svg { display: block; flex-shrink: 0; vertical-align: middle; }
 
-/* Translate button in chat */
-.translate-btn {
-  display: inline-flex; align-items: center; gap: 3px;
-  font-size: .62rem; font-family: monospace;
-  color: var(--text-faint); cursor: pointer;
-  background: none; border: none; padding: .1rem .3rem;
-  border-radius: 4px; margin-top: .2rem;
-  transition: color .15s, background .15s;
-}
-.translate-btn:hover { color: var(--accent); background: var(--btn-bg); }
-.translated-text {
-  font-size: .78rem; color: var(--text-muted);
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  margin-top: .3rem; padding: .3rem .5rem;
-  background: var(--surface2); border-radius: 4px;
-  border-left: 2px solid var(--accent);
-  display: none;
-}
-.translated-text.show { display: block; }
 
 /* APP */
 #app { display: none; height: 100vh; flex-direction: column; position: relative; z-index: 2; }
@@ -676,7 +657,7 @@ body {
 
 <!-- AUTH SCREEN -->
 <div id="authScreen">
-  <div class="auth-logo">WatchTogether</div>
+  <div class="auth-logo">Watch Together</div>
   <div class="auth-card">
     <div class="auth-tabs">
       <button class="auth-tab active" onclick="switchAuthTab('login')" id="authTabLogin">Sign in</button>
@@ -690,7 +671,7 @@ body {
       <input type="password" class="field-input" id="loginPassword" placeholder="Password…" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
       <div class="auth-error" id="loginError"></div>
       <button class="lobby-btn" onclick="doLogin()">
-        <span>Sign in</span>
+        <span id="btnSignInText">Sign in</span>
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
       </button>
     </div>
@@ -704,7 +685,7 @@ body {
       <div class="avatar-grid" id="avatarGrid"></div>
       <div class="auth-error" id="regError"></div>
       <button class="lobby-btn" onclick="doRegister()">
-        <span>Create account</span>
+        <span id="btnRegText">Create account</span>
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
       </button>
     </div>
@@ -735,7 +716,7 @@ body {
 
 <!-- LOBBY -->
 <div id="lobby">
-  <div class="lobby-logo">WatchTogether</div>
+  <div class="lobby-logo">Watch Together</div>
   <div class="lobby-card">
     <div class="tabs">
       <button class="tab active" onclick="switchTab('host')" id="tabHost">Host</button>
@@ -763,7 +744,7 @@ body {
       <div class="icon-btn" onclick="goHome()" id="homeBtn" title="Home">
         <svg viewBox="0 0 24 24"><path d="M3 9.5L12 3l9 6.5V20a1 1 0 01-1 1H5a1 1 0 01-1-1V9.5z"/><path d="M9 21V12h6v9"/></svg>
       </div>
-      <div class="topbar-logo">WatchTogether</div>
+      <div class="topbar-logo">Watch Together</div>
       <div class="room-badge">
         <div class="room-dot"></div>
         <span id="roomCodeDisplay">------</span>
@@ -978,6 +959,8 @@ function setLang(l){
 
   // Auth screen
   document.getElementById('authTabLogin').textContent=t.authSignIn||'Sign in';
+  const bsi=document.getElementById('btnSignInText');if(bsi)bsi.textContent=t.authSignIn||'Sign in';
+  const brg=document.getElementById('btnRegText');if(brg)brg.textContent=t.authRegister||'Create account';
   document.getElementById('authTabReg').textContent=t.authRegister||'Register';
   document.getElementById('loginUsername').placeholder=t.hostNamePh;
   document.getElementById('loginPassword').placeholder=t.authPassword||'Password…';
@@ -1102,46 +1085,23 @@ function connectWS(){
 async function hostOffer(clientId){
   if(!localFile)return;
   const pc=new RTCPeerConnection({iceServers:ICE});peers.set(clientId,pc);
+  const mainVideo=document.getElementById('videoPlayer');
 
-  // Use a hidden video element for captureStream — more reliable than main player
-  let streamVideo = document.getElementById('hiddenStreamVideo');
-  if(!streamVideo){
-    streamVideo = document.createElement('video');
-    streamVideo.id = 'hiddenStreamVideo';
-    streamVideo.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;opacity:0.01;pointer-events:none';
-    streamVideo.muted = false;
-    document.body.appendChild(streamVideo);
+  // captureStream directly from playing main video
+  let stream=null;
+  const wasP=mainVideo.paused;
+  try{
+    if(!wasP||mainVideo.readyState>=2){
+      if(wasP){ await mainVideo.play().catch(()=>{}); await new Promise(r=>setTimeout(r,100)); }
+      if(mainVideo.captureStream) stream=mainVideo.captureStream();
+      else if(mainVideo.mozCaptureStream) stream=mainVideo.mozCaptureStream();
+      if(wasP) mainVideo.pause();
+    }
+  }catch(e){ sysMsg('captureStream error: '+e.message); }
+
+  if(!stream||!stream.getTracks().length){
+    sysMsg(i('streamErr'));return;
   }
-
-  // Sync hidden video with main player
-  const mainVideo = document.getElementById('videoPlayer');
-  streamVideo.src = mainVideo.src || URL.createObjectURL(localFile);
-  streamVideo.currentTime = mainVideo.currentTime;
-
-  await new Promise((res, rej) => {
-    streamVideo.oncanplay = res;
-    streamVideo.onerror = rej;
-    streamVideo.load();
-  });
-
-  streamVideo.currentTime = mainVideo.currentTime;
-  await streamVideo.play().catch(()=>{});
-  await new Promise(r=>setTimeout(r,300));
-
-  let stream;
-  if(streamVideo.captureStream) stream = streamVideo.captureStream();
-  else if(streamVideo.mozCaptureStream) stream = streamVideo.mozCaptureStream();
-  else { sysMsg(i('captureErr')); return; }
-
-  if(!stream.getTracks().length){ sysMsg(i('streamErr')); return; }
-
-  // Keep hidden video in sync with main player
-  mainVideo.addEventListener('timeupdate', ()=>{
-    if(Math.abs(streamVideo.currentTime - mainVideo.currentTime) > 1)
-      streamVideo.currentTime = mainVideo.currentTime;
-  });
-  mainVideo.addEventListener('play', ()=>streamVideo.play().catch(()=>{}));
-  mainVideo.addEventListener('pause', ()=>streamVideo.pause());
 
   stream.getTracks().forEach(t=>pc.addTrack(t,stream));
   pc.onicecandidate=({candidate})=>{if(candidate)ws.send(JSON.stringify({type:'ice',candidate,targetId:clientId,toHost:false}));};
@@ -1159,12 +1119,30 @@ async function viewerAnswer(offer){
   pc.onicecandidate=({candidate})=>{if(candidate)ws.send(JSON.stringify({type:'ice',candidate,toHost:true}));};
   pc.ontrack=({streams})=>{
     const v=document.getElementById('videoPlayer');
-    v.srcObject=streams[0];v.play().catch(()=>{});
-    showPlayer();setupEvents();
+    // Use srcObject for live P2P stream
+    if(v.src){URL.revokeObjectURL(v.src);v.removeAttribute('src');}
+    v.srcObject=streams[0];
+    showPlayer();
+    // Setup sync events (no local file for viewer)
+    v.addEventListener('timeupdate',()=>{
+      if(v.duration){
+        document.getElementById('progressBar').value=(v.currentTime/v.duration)*100;
+        document.getElementById('timeLabel').textContent=`${ft(v.currentTime)} / ${ft(v.duration)}`;
+      }
+    });
+    v.addEventListener('play',()=>setPlayIcon(false));
+    v.addEventListener('pause',()=>setPlayIcon(true));
+    v.play().catch(()=>{
+      // Autoplay blocked — show play button
+      showPlayer();
+    });
     p2pShow(i('p2pDone'));setTimeout(()=>p2pHide(),3000);
     sysMsg(i('videoReceived'));
   };
-  pc.onconnectionstatechange=()=>{if(pc.connectionState==='failed')p2pShow(i('p2pFail'));};
+  pc.onconnectionstatechange=()=>{
+    if(pc.connectionState==='failed')p2pShow(i('p2pFail'));
+    if(pc.connectionState==='disconnected')sysMsg(i('p2pFail'));
+  };
   await pc.setRemoteDescription(new RTCSessionDescription(offer));
   const ans=await pc.createAnswer();await pc.setLocalDescription(ans);
   ws.send(JSON.stringify({type:'answer',answer:pc.localDescription}));
@@ -1218,52 +1196,12 @@ function p2pHide(){document.getElementById('p2pStatus').classList.remove('show')
 let msgCounter = 0;
 function addMsg(author,text,avatar){
   const m=document.getElementById('messages');
-  const d=document.createElement('div');
-  d.className='msg';
+  const d=document.createElement('div');d.className='msg';
   const av=avatar?`<span style="margin-right:.3rem">${esc(avatar)}</span>`:'';
-  const msgId = 'msg_' + (++msgCounter);
-  const translateLabel = T[lang]?.translateMsg || 'Translate';
-  d.innerHTML=`
-    <div class="msg-author">${av}${esc(author)}</div>
-    <div class="msg-text" id="txt_${msgId}">${esc(text)}</div>
-    <div class="translated-text" id="tr_${msgId}"></div>
-    <button class="translate-btn" onclick="translateMsg('${msgId}','${esc(text).replace(/'/g,"\\'")}')">
-      🌐 ${translateLabel}
-    </button>`;
+  d.innerHTML=`<div class="msg-author">${av}${esc(author)}</div><div class="msg-text">${esc(text)}</div>`;
   m.appendChild(d);m.scrollTop=m.scrollHeight;
 }
 
-async function translateMsg(msgId, text){
-  const trEl = document.getElementById('tr_'+msgId);
-  const btn = trEl?.previousElementSibling;
-  if(!trEl) return;
-
-  // Toggle if already translated
-  if(trEl.classList.contains('show')){
-    trEl.classList.remove('show');
-    btn.innerHTML = `🌐 ${T[lang]?.translateMsg||'Translate'}`;
-    return;
-  }
-
-  btn.textContent = '⏳';
-  try {
-    // Use MyMemory free translation API
-    const targetLang = {en:'en',ru:'ru',uk:'uk',ja:'ja'}[lang] || 'en';
-    const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=autodetect|${targetLang}`;
-    const r = await fetch(url);
-    const data = await r.json();
-    const translated = data?.responseData?.translatedText;
-    if(translated && translated !== text){
-      trEl.textContent = translated;
-      trEl.classList.add('show');
-      btn.innerHTML = `🌐 ${T[lang]?.translateClose||'Close'}`;
-    } else {
-      btn.innerHTML = `🌐 ${T[lang]?.translateMsg||'Translate'}`;
-    }
-  } catch {
-    btn.innerHTML = `🌐 ${T[lang]?.translateMsg||'Translate'}`;
-  }
-}
 function sysMsg(text){
   const m=document.getElementById('messages');
   const d=document.createElement('div');d.className='msg msg-system';
