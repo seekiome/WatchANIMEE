@@ -205,14 +205,16 @@ body {
   width: 100%; padding: .85rem;
   border: 1px solid var(--border-accent);
   border-radius: 12px; background: var(--btn-bg);
-  color: var(--logo-color); font-family: 'Cormorant Garamond', serif;
-  font-size: 1rem; letter-spacing: .1em;
+  color: var(--logo-color);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: .95rem; letter-spacing: .05em;
   cursor: pointer; transition: all .2s;
   display: flex; align-items: center; justify-content: center;
-  gap: .6rem; line-height: 1; vertical-align: middle;
+  gap: .5rem; line-height: 1;
 }
+.lobby-btn span { line-height: 1; }
 .lobby-btn:hover { background: var(--btn-bg-hover); transform: translateY(-1px); }
-.lobby-btn svg { display: block; flex-shrink: 0; vertical-align: middle; }
+.lobby-btn svg { display: block; flex-shrink: 0; width: 14px; height: 14px; }
 
 
 /* APP */
@@ -672,7 +674,7 @@ body {
       <div class="auth-error" id="loginError"></div>
       <button class="lobby-btn" onclick="doLogin()">
         <span id="btnSignInText">Sign in</span>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1l7 7-7 7M1 8h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
       </button>
     </div>
 
@@ -686,7 +688,7 @@ body {
       <div class="auth-error" id="regError"></div>
       <button class="lobby-btn" onclick="doRegister()">
         <span id="btnRegText">Create account</span>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1l7 7-7 7M1 8h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
       </button>
     </div>
 
@@ -725,14 +727,14 @@ body {
     <div id="hostTab">
       <label class="field-label" id="labelNameHost">Your name</label>
       <input type="text" class="field-input" id="hostName" maxlength="24">
-      <button class="lobby-btn" onclick="createRoom()" id="btnCreate"><span id="btnCreateText">Create room</span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></button>
+      <button class="lobby-btn" onclick="createRoom()" id="btnCreate"><span id="btnCreateText">Create room</span><svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1l7 7-7 7M1 8h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg></button>
     </div>
     <div id="joinTab" style="display:none">
       <label class="field-label" id="labelNameJoin">Your name</label>
       <input type="text" class="field-input" id="joinName" maxlength="24">
       <label class="field-label" id="labelCode">Room code</label>
       <input type="text" class="field-input" id="joinCode" maxlength="8" style="text-transform:uppercase;letter-spacing:.12em;font-family:monospace">
-      <button class="lobby-btn" onclick="joinRoom()" id="btnJoin"><span id="btnJoinText">Enter room</span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></button>
+      <button class="lobby-btn" onclick="joinRoom()" id="btnJoin"><span id="btnJoinText">Enter room</span><svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1l7 7-7 7M1 8h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg></button>
     </div>
   </div>
 </div>
