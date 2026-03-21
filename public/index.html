@@ -212,6 +212,27 @@ body {
   gap: .5rem; line-height: 1;
 }
 .lobby-btn:hover { background: var(--btn-bg-hover); transform: translateY(-1px); }
+.lobby-btn svg { display: block; flex-shrink: 0; }
+
+/* Translate button in chat */
+.translate-btn {
+  display: inline-flex; align-items: center; gap: 3px;
+  font-size: .62rem; font-family: monospace;
+  color: var(--text-faint); cursor: pointer;
+  background: none; border: none; padding: .1rem .3rem;
+  border-radius: 4px; margin-top: .2rem;
+  transition: color .15s, background .15s;
+}
+.translate-btn:hover { color: var(--accent); background: var(--btn-bg); }
+.translated-text {
+  font-size: .78rem; color: var(--text-muted);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  margin-top: .3rem; padding: .3rem .5rem;
+  background: var(--surface2); border-radius: 4px;
+  border-left: 2px solid var(--accent);
+  display: none;
+}
+.translated-text.show { display: block; }
 
 /* APP */
 #app { display: none; height: 100vh; flex-direction: column; position: relative; z-index: 2; }
@@ -308,46 +329,47 @@ body {
 .p2p-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--accent); }
 
 .controls {
-  display: flex; align-items: center; gap: .75rem;
-  padding: .75rem 1.25rem;
+  display: flex; align-items: center; gap: 1rem;
+  padding: 1rem 1.5rem;
   background: var(--surface4);
   border-top: 1px solid var(--border2);
   flex-shrink: 0; backdrop-filter: blur(8px);
+  min-height: 64px;
 }
 .play-btn {
-  width: 38px; height: 38px;
+  width: 44px; height: 44px;
   border: 1px solid var(--border-accent);
   border-radius: 50%; background: var(--btn-bg);
   display: flex; align-items: center; justify-content: center;
   cursor: pointer; flex-shrink: 0; transition: all .15s;
 }
 .play-btn:hover { background: var(--btn-bg-hover); }
-.play-btn svg { width: 14px; height: 14px; fill: var(--accent2); stroke: none; }
-.progress-wrap { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+.play-btn svg { width: 16px; height: 16px; fill: var(--accent2); stroke: none; }
+.progress-wrap { flex: 1; display: flex; flex-direction: column; gap: 6px; }
 .progress {
-  width: 100%; height: 3px;
+  width: 100%; height: 4px;
   -webkit-appearance: none; appearance: none;
   background: var(--progress-bg); border-radius: 2px; cursor: pointer; outline: none;
 }
 .progress::-webkit-slider-thumb {
-  -webkit-appearance: none; width: 11px; height: 11px;
+  -webkit-appearance: none; width: 14px; height: 14px;
   border-radius: 50%; background: var(--accent); cursor: pointer;
 }
-.time-label { font-family: monospace; font-size: .62rem; color: var(--text-faint); }
-.vol-wrap { display: flex; align-items: center; gap: .4rem; flex-shrink: 0; }
-.vol-wrap svg { width: 14px; height: 14px; stroke: var(--text-muted); fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.time-label { font-family: monospace; font-size: .7rem; color: var(--text-faint); }
+.vol-wrap { display: flex; align-items: center; gap: .5rem; flex-shrink: 0; }
+.vol-wrap svg { width: 16px; height: 16px; stroke: var(--text-muted); fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .vol-slider {
-  width: 60px; height: 3px; -webkit-appearance: none;
+  width: 80px; height: 4px; -webkit-appearance: none;
   background: var(--progress-bg); border-radius: 2px; outline: none; cursor: pointer;
 }
 .vol-slider::-webkit-slider-thumb {
-  -webkit-appearance: none; width: 10px; height: 10px;
+  -webkit-appearance: none; width: 12px; height: 12px;
   border-radius: 50%; background: var(--text-muted); cursor: pointer;
 }
 
 /* SIDEBAR */
 .sidebar {
-  width: 270px; background: var(--surface3);
+  width: 300px; background: var(--surface3);
   border-left: 1px solid var(--border2);
   display: flex; flex-direction: column; flex-shrink: 0;
   backdrop-filter: blur(12px);
@@ -366,12 +388,13 @@ body {
   scrollbar-width: thin; scrollbar-color: var(--scrollbar) transparent;
 }
 .msg { display: flex; flex-direction: column; gap: .15rem; }
-.msg-author { font-size: .67rem; font-family: monospace; color: var(--accent); letter-spacing: .04em; }
+.msg-author { font-size: .72rem; font-family: monospace; color: var(--accent); letter-spacing: .04em; }
 .msg-text {
-  font-size: .83rem; line-height: 1.5;
+  font-size: .85rem; line-height: 1.5;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   background: var(--msg-bg);
   border: 1px solid var(--border2);
-  padding: .42rem .7rem; border-radius: 0 8px 8px 8px;
+  padding: .45rem .75rem; border-radius: 0 8px 8px 8px;
   color: var(--text); word-break: break-word;
 }
 .msg-system .msg-text {
@@ -380,13 +403,14 @@ body {
   font-family: monospace; padding: .1rem 0;
 }
 .chat-input-wrap {
-  padding: .7rem; border-top: 1px solid var(--border2); display: flex; gap: .45rem;
+  padding: .75rem; border-top: 1px solid var(--border2); display: flex; gap: .45rem;
 }
 .chat-input {
   flex: 1; background: var(--surface2);
   border: 1px solid var(--border);
-  border-radius: 8px; padding: .55rem .8rem;
-  color: var(--text); font-family: 'Cormorant Garamond', serif;
+  border-radius: 8px; padding: .6rem .9rem;
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   font-size: .9rem; outline: none; transition: border-color .2s;
 }
 .chat-input:focus { border-color: var(--border-accent); }
@@ -394,7 +418,7 @@ body {
 .send-btn {
   background: var(--btn-bg);
   border: 1px solid var(--border-accent);
-  border-radius: 8px; width: 36px; cursor: pointer;
+  border-radius: 8px; width: 38px; cursor: pointer;
   display: flex; align-items: center; justify-content: center;
   transition: background .15s;
 }
@@ -697,7 +721,7 @@ body {
   </div>
   <div class="fp-add">
     <input type="text" id="addFriendInput" placeholder="Add by username…" onkeydown="if(event.key==='Enter')sendFriendRequest()">
-    <button class="fp-add-btn" onclick="sendFriendRequest()">Add</button>
+    <button class="fp-add-btn" id="fpAddBtn" onclick="sendFriendRequest()">Add</button>
   </div>
   <div id="friendRequestsSection" style="display:none">
     <div class="fp-section">Requests</div>
@@ -753,7 +777,7 @@ body {
       <div class="icon-btn" onclick="openShare()" id="inviteBtn" title="Invite">
         <svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
       </div>
-      <div class="friends-btn" onclick="toggleFriends()" id="friendsBtn" title="Friends" style="display:none">
+      <div class="friends-btn" onclick="toggleFriends()" id="friendsBtn" title="Friends">
         <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
         <div class="friends-notif" id="friendsNotif"></div>
       </div>
@@ -821,11 +845,11 @@ body {
     <div class="modal-sub" id="modalSub">// share the link or room code</div>
     <div class="copy-row">
       <input type="text" class="copy-input" id="shareLink" readonly>
-      <button class="copy-btn" id="copyBtn" onclick="copyLink()">Copy</button>
+      <button class="copy-btn" id="copyBtn" onclick="copyLink()"><span id="copyBtnLabel">Copy</span></button>
     </div>
     <div class="or-divider" id="orCode">or room code</div>
     <div class="room-code-big" id="shareCode">------</div>
-    <button class="modal-close" id="modalClose" onclick="closeShare()">Close</button>
+    <button class="modal-close" id="modalClose" onclick="closeShare()"><span id="modalCloseText">Close</span></button>
   </div>
 </div>
 
@@ -840,7 +864,7 @@ const T = {
     chatLabel:'Chat', chatPh:'Write a message…',
     modalTitle:'Invite friends', modalSub:'// share the link or room code',
     orCode:'or room code', copyBtn:'Copy', copyDone:'✓ Copied', modalClose:'Close',
-    homeTitle:'Home', inviteTitle:'Invite',
+    homeTitle:'Home', inviteTitle:'Invite', authSignIn:'Sign in', authRegister:'Register', authPassword:'Password…', addFriend:'Add by username…', fpAdd:'Add', translateMsg:'Translate', translateClose:'Close',
     waitingHost:'Waiting for host video…',
     waitConn:'Connecting to host…', waitRecv:'Receiving video…',
     p2pConn:'Connecting P2P…', p2pDone:'P2P connected ✓', p2pFail:'P2P failed — try rejoining',
@@ -863,7 +887,7 @@ const T = {
     chatLabel:'Чат', chatPh:'Написать…',
     modalTitle:'Пригласить друзей', modalSub:'// поделись ссылкой или кодом',
     orCode:'или код комнаты', copyBtn:'Копировать', copyDone:'✓ Скопировано', modalClose:'Закрыть',
-    homeTitle:'Главная', inviteTitle:'Пригласить',
+    homeTitle:'Главная', inviteTitle:'Пригласить', authSignIn:'Войти', authRegister:'Регистрация', authPassword:'Пароль…', addFriend:'Добавить по нику…', fpAdd:'Добавить', translateMsg:'Перевести', translateClose:'Закрыть',
     waitingHost:'Ожидание видео от хоста…',
     waitConn:'Подключение к хосту…', waitRecv:'Получение видео…',
     p2pConn:'Установка P2P…', p2pDone:'P2P подключено ✓', p2pFail:'P2P не удалось — перезайди',
@@ -886,7 +910,7 @@ const T = {
     chatLabel:'Чат', chatPh:'Написати…',
     modalTitle:'Запросити друзів', modalSub:'// поділись посиланням або кодом',
     orCode:'або код кімнати', copyBtn:'Копіювати', copyDone:'✓ Скопійовано', modalClose:'Закрити',
-    homeTitle:'Головна', inviteTitle:'Запросити',
+    homeTitle:'Головна', inviteTitle:'Запросити', authSignIn:'Увійти', authRegister:'Реєстрація', authPassword:'Пароль…', addFriend:'Додати за ніком…', fpAdd:'Додати', translateMsg:'Перекласти', translateClose:'Закрити',
     waitingHost:'Очікування відео від хоста…',
     waitConn:'Підключення до хоста…', waitRecv:'Отримання відео…',
     p2pConn:'Встановлення P2P…', p2pDone:'P2P підключено ✓', p2pFail:'P2P не вдалось — перезайди',
@@ -909,7 +933,7 @@ const T = {
     chatLabel:'チャット', chatPh:'メッセージを入力…',
     modalTitle:'友達を招待する', modalSub:'// リンクまたはコードを共有',
     orCode:'または部屋コード', copyBtn:'コピー', copyDone:'✓ コピー済', modalClose:'閉じる',
-    homeTitle:'ホーム', inviteTitle:'招待',
+    homeTitle:'ホーム', inviteTitle:'招待', authSignIn:'ログイン', authRegister:'登録', authPassword:'パスワード…', addFriend:'ユーザー名で追加…', fpAdd:'追加', translateMsg:'翻訳', translateClose:'閉じる',
     waitingHost:'ホストの動画を待っています…',
     waitConn:'ホストに接続中…', waitRecv:'動画を受信中…',
     p2pConn:'P2P 接続中…', p2pDone:'P2P 接続完了 ✓', p2pFail:'P2P 失敗 — 再入室してください',
@@ -937,29 +961,45 @@ function i(k,...a){const v=T[lang][k];return typeof v==='function'?v(...a):v;}
 
 function setLang(l){
   lang=l;
-  document.querySelectorAll('.lang-btn').forEach((b,i)=>b.classList.toggle('active',['en','ru','uk','ja'][i]===l));
-  document.getElementById('tabHost').textContent=i('tabHost');
-  document.getElementById('tabJoin').textContent=i('tabJoin');
-  document.getElementById('labelNameHost').textContent=i('labelNameHost');
-  document.getElementById('labelNameJoin').textContent=i('labelNameJoin');
-  document.getElementById('labelCode').textContent=i('labelCode');
-  document.getElementById('hostName').placeholder=i('hostNamePh');
-  document.getElementById('joinName').placeholder=i('joinNamePh');
-  document.getElementById('joinCode').placeholder=i('codePh');
+  document.querySelectorAll('.lang-btn').forEach((b,idx)=>b.classList.toggle('active',['en','ru','uk','ja'][idx]===l));
+  const t=T[l];
+
+  // Lobby tabs
+  document.getElementById('tabHost').textContent=t.tabHost;
+  document.getElementById('tabJoin').textContent=t.tabJoin;
+  document.getElementById('labelNameHost').textContent=t.labelNameHost;
+  document.getElementById('labelNameJoin').textContent=t.labelNameJoin;
+  document.getElementById('labelCode').textContent=t.labelCode;
+  document.getElementById('hostName').placeholder=t.hostNamePh;
+  document.getElementById('joinName').placeholder=t.joinNamePh;
+  document.getElementById('joinCode').placeholder=t.codePh;
   document.getElementById('btnCreateText').textContent=t.btnCreate;
   document.getElementById('btnJoinText').textContent=t.btnJoin;
-  document.getElementById('uploadTitle').textContent=i('uploadTitle');
-  document.getElementById('chatLabel').textContent=i('chatLabel');
-  document.getElementById('chatInput').placeholder=i('chatPh');
-  document.getElementById('modalTitle').textContent=i('modalTitle');
-  document.getElementById('modalSub').textContent=i('modalSub');
-  document.getElementById('orCode').textContent=i('orCode');
-  document.getElementById('copyBtn').textContent=i('copyBtn');
-  document.getElementById('modalClose').textContent=i('modalClose');
-  document.getElementById('homeBtn').title=i('homeTitle');
-  document.getElementById('inviteBtn').title=i('inviteTitle');
+
+  // Auth screen
+  document.getElementById('authTabLogin').textContent=t.authSignIn||'Sign in';
+  document.getElementById('authTabReg').textContent=t.authRegister||'Register';
+  document.getElementById('loginUsername').placeholder=t.hostNamePh;
+  document.getElementById('loginPassword').placeholder=t.authPassword||'Password…';
+  document.getElementById('regUsername').placeholder=t.hostNamePh;
+  document.getElementById('regPassword').placeholder=t.authPassword||'Password…';
+
+  // App
+  document.getElementById('uploadTitle').textContent=t.uploadTitle;
+  document.getElementById('chatLabel').textContent=t.chatLabel;
+  document.getElementById('chatInput').placeholder=t.chatPh;
+  document.getElementById('modalTitle').textContent=t.modalTitle;
+  document.getElementById('modalSub').textContent=t.modalSub;
+  document.getElementById('orCode').textContent=t.orCode;
+  document.getElementById('copyBtnLabel').textContent=t.copyBtn;
+  document.getElementById('modalCloseText').textContent=t.modalClose;
+  const hb=document.getElementById('homeBtn');if(hb)hb.title=t.homeTitle;
+  const ib=document.getElementById('inviteBtn');if(ib)ib.title=t.inviteTitle;
   const wt=document.getElementById('waitingText');
-  if(wt && wt.textContent) wt.textContent=i('waitingHost');
+  if(wt)wt.textContent=t.waitingHost;
+  // Friends panel
+  document.getElementById('addFriendInput').placeholder=t.addFriend||'Add by username…';
+  document.getElementById('fpAddBtn').textContent=t.fpAdd||'Add';
 }
 
 // STATE
@@ -1062,20 +1102,55 @@ function connectWS(){
 async function hostOffer(clientId){
   if(!localFile)return;
   const pc=new RTCPeerConnection({iceServers:ICE});peers.set(clientId,pc);
-  const video=document.getElementById('videoPlayer');
-  const wasPaused=video.paused;
-  if(wasPaused){try{await video.play();}catch(e){}}
-  await new Promise(r=>setTimeout(r,200));
+
+  // Use a hidden video element for captureStream — more reliable than main player
+  let streamVideo = document.getElementById('hiddenStreamVideo');
+  if(!streamVideo){
+    streamVideo = document.createElement('video');
+    streamVideo.id = 'hiddenStreamVideo';
+    streamVideo.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;opacity:0.01;pointer-events:none';
+    streamVideo.muted = false;
+    document.body.appendChild(streamVideo);
+  }
+
+  // Sync hidden video with main player
+  const mainVideo = document.getElementById('videoPlayer');
+  streamVideo.src = mainVideo.src || URL.createObjectURL(localFile);
+  streamVideo.currentTime = mainVideo.currentTime;
+
+  await new Promise((res, rej) => {
+    streamVideo.oncanplay = res;
+    streamVideo.onerror = rej;
+    streamVideo.load();
+  });
+
+  streamVideo.currentTime = mainVideo.currentTime;
+  await streamVideo.play().catch(()=>{});
+  await new Promise(r=>setTimeout(r,300));
+
   let stream;
-  if(video.captureStream)stream=video.captureStream();
-  else if(video.mozCaptureStream)stream=video.mozCaptureStream();
-  else{sysMsg(i('captureErr'));return;}
-  if(wasPaused)video.pause();
-  if(!stream.getTracks().length){sysMsg(i('streamErr'));return;}
+  if(streamVideo.captureStream) stream = streamVideo.captureStream();
+  else if(streamVideo.mozCaptureStream) stream = streamVideo.mozCaptureStream();
+  else { sysMsg(i('captureErr')); return; }
+
+  if(!stream.getTracks().length){ sysMsg(i('streamErr')); return; }
+
+  // Keep hidden video in sync with main player
+  mainVideo.addEventListener('timeupdate', ()=>{
+    if(Math.abs(streamVideo.currentTime - mainVideo.currentTime) > 1)
+      streamVideo.currentTime = mainVideo.currentTime;
+  });
+  mainVideo.addEventListener('play', ()=>streamVideo.play().catch(()=>{}));
+  mainVideo.addEventListener('pause', ()=>streamVideo.pause());
+
   stream.getTracks().forEach(t=>pc.addTrack(t,stream));
   pc.onicecandidate=({candidate})=>{if(candidate)ws.send(JSON.stringify({type:'ice',candidate,targetId:clientId,toHost:false}));};
-  pc.onconnectionstatechange=()=>{if(pc.connectionState==='connected')sysMsg(i('viewerP2P'));if(pc.connectionState==='failed')sysMsg(i('p2pFailed'));};
-  const offer=await pc.createOffer();await pc.setLocalDescription(offer);
+  pc.onconnectionstatechange=()=>{
+    if(pc.connectionState==='connected')sysMsg(i('viewerP2P'));
+    if(pc.connectionState==='failed')sysMsg(i('p2pFailed'));
+  };
+  const offer=await pc.createOffer();
+  await pc.setLocalDescription(offer);
   ws.send(JSON.stringify({type:'offer',offer:pc.localDescription,targetId:clientId}));
 }
 
@@ -1140,12 +1215,54 @@ function setVolume(val){document.getElementById('videoPlayer').volume=val;}
 function p2pShow(t){document.getElementById('p2pStatusText').textContent=t;document.getElementById('p2pStatus').classList.add('show');}
 function p2pHide(){document.getElementById('p2pStatus').classList.remove('show');}
 
+let msgCounter = 0;
 function addMsg(author,text,avatar){
   const m=document.getElementById('messages');
-  const d=document.createElement('div');d.className='msg';
+  const d=document.createElement('div');
+  d.className='msg';
   const av=avatar?`<span style="margin-right:.3rem">${esc(avatar)}</span>`:'';
-  d.innerHTML=`<div class="msg-author">${av}${esc(author)}</div><div class="msg-text">${esc(text)}</div>`;
+  const msgId = 'msg_' + (++msgCounter);
+  const translateLabel = T[lang]?.translateMsg || 'Translate';
+  d.innerHTML=`
+    <div class="msg-author">${av}${esc(author)}</div>
+    <div class="msg-text" id="txt_${msgId}">${esc(text)}</div>
+    <div class="translated-text" id="tr_${msgId}"></div>
+    <button class="translate-btn" onclick="translateMsg('${msgId}','${esc(text).replace(/'/g,"\\'")}')">
+      🌐 ${translateLabel}
+    </button>`;
   m.appendChild(d);m.scrollTop=m.scrollHeight;
+}
+
+async function translateMsg(msgId, text){
+  const trEl = document.getElementById('tr_'+msgId);
+  const btn = trEl?.previousElementSibling;
+  if(!trEl) return;
+
+  // Toggle if already translated
+  if(trEl.classList.contains('show')){
+    trEl.classList.remove('show');
+    btn.innerHTML = `🌐 ${T[lang]?.translateMsg||'Translate'}`;
+    return;
+  }
+
+  btn.textContent = '⏳';
+  try {
+    // Use MyMemory free translation API
+    const targetLang = {en:'en',ru:'ru',uk:'uk',ja:'ja'}[lang] || 'en';
+    const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=autodetect|${targetLang}`;
+    const r = await fetch(url);
+    const data = await r.json();
+    const translated = data?.responseData?.translatedText;
+    if(translated && translated !== text){
+      trEl.textContent = translated;
+      trEl.classList.add('show');
+      btn.innerHTML = `🌐 ${T[lang]?.translateClose||'Close'}`;
+    } else {
+      btn.innerHTML = `🌐 ${T[lang]?.translateMsg||'Translate'}`;
+    }
+  } catch {
+    btn.innerHTML = `🌐 ${T[lang]?.translateMsg||'Translate'}`;
+  }
 }
 function sysMsg(text){
   const m=document.getElementById('messages');
@@ -1335,7 +1452,7 @@ function closeShare(){document.getElementById('shareModal').classList.remove('op
 
 function copyLink(){
   navigator.clipboard.writeText(document.getElementById('shareLink').value);
-  const b=document.getElementById('copyBtn');
+  const b=document.getElementById('copyBtnLabel');
   b.textContent=i('copyDone');setTimeout(()=>b.textContent=i('copyBtn'),2000);
 }
 
@@ -1440,6 +1557,13 @@ async function tryAutoLogin(){
 let friendsPanelOpen = false;
 
 function toggleFriends(){
+  if(!authToken){
+    // If not logged in, go back to auth
+    if(document.getElementById('app').style.display !== 'none'){
+      sysMsg('Sign in to use friends');
+    }
+    return;
+  }
   friendsPanelOpen = !friendsPanelOpen;
   document.getElementById('friendsPanel').classList.toggle('open', friendsPanelOpen);
   if(friendsPanelOpen) loadFriends();
@@ -1486,8 +1610,7 @@ function renderFriends(friends, requests){
 
   // Friends list
   if(friends.length === 0){
-    empty.style.display = 'block';
-    list.innerHTML = '<div class="fp-empty" id="friendsEmpty">No friends yet</div>';
+    list.innerHTML = '<div class="fp-empty">No friends yet.<br>Add someone by username above.</div>';
     return;
   }
   list.innerHTML = friends.map(f => `
@@ -1501,6 +1624,7 @@ function renderFriends(friends, requests){
         <div class="fp-status-text ${f.online ? 'online' : ''}">${f.online ? 'Online' : 'Offline'}</div>
       </div>
       <div class="fp-actions">
+        ${roomId ? `<button class="fp-action-btn accept" onclick="inviteFriendToRoom('${escHtml(f.username)}')" title="Invite to room">📨</button>` : ''}
         <button class="fp-action-btn decline" onclick="removeFriend('${escHtml(f.username)}')" title="Remove">✕</button>
       </div>
     </div>
@@ -1549,8 +1673,25 @@ async function removeFriend(username){
   loadFriends();
 }
 
+function inviteFriendToRoom(username){
+  if(!roomId) return;
+  const link = `${location.origin}?room=${roomId}`;
+  // Send via WS as a chat system message targeted to friend
+  if(ws && ws.readyState === 1){
+    ws.send(JSON.stringify({
+      type: 'chat',
+      name: authUser?.username || myName,
+      text: `🎬 Invited ${username} — Room: ${roomId}`,
+      avatar: authUser?.avatar || ''
+    }));
+  }
+  // Also copy link
+  navigator.clipboard.writeText(link).catch(()=>{});
+  sysMsg(`Invite link copied for ${username}`);
+}
+
 function addSysIfInRoom(text){
-  const m = document.getElementById('messages');
+  const m=document.getElementById('messages');
   if(m) sysMsg(text);
 }
 
