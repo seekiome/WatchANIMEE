@@ -212,7 +212,7 @@ body {
   display: flex; align-items: center; justify-content: center;
   gap: .5rem; line-height: 1;
 }
-.lobby-btn span { line-height: 1; }
+.lobby-btn span { line-height: 1; display: flex; align-items: center; }
 .lobby-btn:hover { background: var(--btn-bg-hover); transform: translateY(-1px); }
 .lobby-btn svg { display: block; flex-shrink: 0; width: 14px; height: 14px; }
 
@@ -507,6 +507,8 @@ body {
 }
 .avatar-opt.selected { border-color: var(--accent); background: var(--btn-active-bg); transform: scale(1.1); }
 .avatar-opt:hover { border-color: var(--border-accent); }
+.avatar-upload-opt { color: var(--text-muted); }
+.avatar-upload-opt:hover { color: var(--accent); }
 
 .auth-error { font-size: .75rem; color: var(--accent); font-family: monospace; margin-bottom: .75rem; display: none; }
 .auth-error.show { display: block; }
@@ -595,6 +597,7 @@ body {
   background: var(--surface2); border: 1px solid var(--border);
   display: flex; align-items: center; justify-content: center;
   font-size: 1rem; flex-shrink: 0; position: relative;
+  background-size: cover; background-position: center; overflow: hidden;
 }
 .fp-status-dot {
   position: absolute; bottom: 0; right: 0;
@@ -633,7 +636,7 @@ body {
   transition: background .2s; font-family: monospace;
 }
 .user-chip:hover { background: var(--btn-bg-hover); }
-.user-chip-avatar { font-size: .9rem; }
+.user-chip-avatar { font-size: .9rem; width: 22px; height: 22px; border-radius: 50%; display: inline-block; background-size: cover; background-position: center; vertical-align: middle; }
 </style>
 </head>
 <body>
@@ -674,7 +677,7 @@ body {
       <div class="auth-error" id="loginError"></div>
       <button class="lobby-btn" onclick="doLogin()">
         <span id="btnSignInText">Sign in</span>
-        <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1l7 7-7 7M1 8h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
+        <svg width="20" height="8" viewBox="0 0 28 8" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><line x1="0" y1="4" x2="23" y2="4"/><polyline points="19 1 24 4 19 7"/></svg>
       </button>
     </div>
 
@@ -684,11 +687,16 @@ body {
       <label class="field-label">Password</label>
       <input type="password" class="field-input" id="regPassword" placeholder="Password…" autocomplete="new-password">
       <label class="avatar-label">Pick your avatar</label>
+      <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:.75rem">
+        <div id="avatarPreview" style="width:52px;height:52px;border-radius:50%;border:1.5px solid var(--border-accent);background:var(--surface2);display:flex;align-items:center;justify-content:center;font-size:1.6rem;flex-shrink:0;">🌸</div>
+        <div style="font-size:.72rem;color:var(--text-faint);font-family:monospace;line-height:1.5">Choose emoji below<br>or upload a photo</div>
+      </div>
       <div class="avatar-grid" id="avatarGrid"></div>
+      <input type="file" id="avatarFileInput" accept="image/*" style="display:none" onchange="handleAvatarImage(this)">
       <div class="auth-error" id="regError"></div>
       <button class="lobby-btn" onclick="doRegister()">
         <span id="btnRegText">Create account</span>
-        <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1l7 7-7 7M1 8h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
+        <svg width="20" height="8" viewBox="0 0 28 8" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><line x1="0" y1="4" x2="23" y2="4"/><polyline points="19 1 24 4 19 7"/></svg>
       </button>
     </div>
 
@@ -727,14 +735,14 @@ body {
     <div id="hostTab">
       <label class="field-label" id="labelNameHost">Your name</label>
       <input type="text" class="field-input" id="hostName" maxlength="24">
-      <button class="lobby-btn" onclick="createRoom()" id="btnCreate"><span id="btnCreateText">Create room</span><svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1l7 7-7 7M1 8h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg></button>
+      <button class="lobby-btn" onclick="createRoom()" id="btnCreate"><span id="btnCreateText">Create room</span><svg width="20" height="8" viewBox="0 0 28 8" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><line x1="0" y1="4" x2="23" y2="4"/><polyline points="19 1 24 4 19 7"/></svg></button>
     </div>
     <div id="joinTab" style="display:none">
       <label class="field-label" id="labelNameJoin">Your name</label>
       <input type="text" class="field-input" id="joinName" maxlength="24">
       <label class="field-label" id="labelCode">Room code</label>
       <input type="text" class="field-input" id="joinCode" maxlength="8" style="text-transform:uppercase;letter-spacing:.12em;font-family:monospace">
-      <button class="lobby-btn" onclick="joinRoom()" id="btnJoin"><span id="btnJoinText">Enter room</span><svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1l7 7-7 7M1 8h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg></button>
+      <button class="lobby-btn" onclick="joinRoom()" id="btnJoin"><span id="btnJoinText">Enter room</span><svg width="20" height="8" viewBox="0 0 28 8" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><line x1="0" y1="4" x2="23" y2="4"/><polyline points="19 1 24 4 19 7"/></svg></button>
     </div>
   </div>
 </div>
@@ -760,7 +768,7 @@ body {
       <div class="icon-btn" onclick="openShare()" id="inviteBtn" title="Invite">
         <svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
       </div>
-      <div class="friends-btn" onclick="toggleFriends()" id="friendsBtn" title="Friends">
+      <div class="friends-btn" onclick="toggleFriends()" id="friendsBtn" title="Friends" style="display:none">
         <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
         <div class="friends-notif" id="friendsNotif"></div>
       </div>
@@ -1400,6 +1408,21 @@ function copyLink(){
 const AVATARS = ['🌸','🎋','🦊','🐼','🌙','⭐','🎭','🎸','🍵','🐉','🦋','🌺','🎮','🌊','🔥','🌿'];
 let authToken = null, authUser = null, selectedAvatar = AVATARS[0];
 
+function setAvatarEl(el, avatar){
+  if(!el) return;
+  if(avatar && avatar.startsWith('data:')){
+    el.textContent = '';
+    el.style.backgroundImage = `url(${avatar})`;
+    el.style.backgroundSize = 'cover';
+    el.style.backgroundPosition = 'center';
+    el.style.fontSize = '0';
+  } else {
+    el.textContent = avatar || '🌸';
+    el.style.backgroundImage = '';
+    el.style.fontSize = '';
+  }
+}
+
 function initAvatarGrid(){
   const grid = document.getElementById('avatarGrid');
   grid.innerHTML = '';
@@ -1411,9 +1434,37 @@ function initAvatarGrid(){
       selectedAvatar = a;
       document.querySelectorAll('.avatar-opt').forEach(x => x.classList.remove('selected'));
       el.classList.add('selected');
+      document.getElementById('avatarPreview').textContent = a;
+      document.getElementById('avatarPreview').style.fontSize = '1.6rem';
+      document.getElementById('avatarPreview').style.backgroundImage = '';
     };
     grid.appendChild(el);
   });
+
+  // Image upload option
+  const uploadEl = document.createElement('div');
+  uploadEl.className = 'avatar-opt avatar-upload-opt';
+  uploadEl.title = 'Upload image';
+  uploadEl.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>';
+  uploadEl.onclick = () => document.getElementById('avatarFileInput').click();
+  grid.appendChild(uploadEl);
+}
+
+function handleAvatarImage(input){
+  const file = input.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    selectedAvatar = e.target.result; // base64
+    document.querySelectorAll('.avatar-opt').forEach(x => x.classList.remove('selected'));
+    const prev = document.getElementById('avatarPreview');
+    prev.textContent = '';
+    prev.style.backgroundImage = `url(${e.target.result})`;
+    prev.style.backgroundSize = 'cover';
+    prev.style.backgroundPosition = 'center';
+    prev.style.fontSize = '0';
+  };
+  reader.readAsDataURL(file);
 }
 
 function switchAuthTab(tab){
@@ -1460,7 +1511,7 @@ function onAuthSuccess(data){
   loadFriends();
   document.getElementById('friendsBtn').style.display = 'flex';
   document.getElementById('userChip').style.display = 'flex';
-  document.getElementById('userChipAvatar').textContent = data.avatar;
+  setAvatarEl(document.getElementById('userChipAvatar'), data.avatar);
   document.getElementById('userChipName').textContent = data.username;
 }
 
@@ -1486,7 +1537,7 @@ async function tryAutoLogin(){
     authUser = { username: data.username, avatar: data.avatar };
     document.getElementById('friendsBtn').style.display = 'flex';
     document.getElementById('userChip').style.display = 'flex';
-    document.getElementById('userChipAvatar').textContent = data.avatar;
+    setAvatarEl(document.getElementById('userChipAvatar'), data.avatar);
     document.getElementById('userChipName').textContent = data.username;
     renderFriends(data.friends || [], data.friendRequests || []);
     return true;
@@ -1553,22 +1604,17 @@ function renderFriends(friends, requests){
     list.innerHTML = '<div class="fp-empty">No friends yet.<br>Add someone by username above.</div>';
     return;
   }
-  list.innerHTML = friends.map(f => `
-    <div class="fp-item">
-      <div class="fp-avatar">
-        ${f.avatar}
-        <div class="fp-status-dot ${f.online ? 'online' : 'offline'}"></div>
-      </div>
-      <div class="fp-info">
-        <div class="fp-name">${escHtml(f.username)}</div>
-        <div class="fp-status-text ${f.online ? 'online' : ''}">${f.online ? 'Online' : 'Offline'}</div>
-      </div>
-      <div class="fp-actions">
-        ${roomId ? `<button class="fp-action-btn accept" onclick="inviteFriendToRoom('${escHtml(f.username)}')" title="Invite to room">📨</button>` : ''}
-        <button class="fp-action-btn decline" onclick="removeFriend('${escHtml(f.username)}')" title="Remove">✕</button>
-      </div>
-    </div>
-  `).join('');
+  list.innerHTML = friends.map(f => {
+    const isImg = f.avatar && f.avatar.startsWith('data:');
+    const avStyle = isImg ? `style="background-image:url(${f.avatar});background-size:cover;background-position:center;font-size:0"` : '';
+    const avContent = isImg ? '' : (f.avatar || '🌸');
+    const inv = roomId ? `<button class="fp-action-btn accept" onclick="inviteFriendToRoom('${escHtml(f.username)}')" title="Invite">📨</button>` : '';
+    return `<div class="fp-item">
+      <div class="fp-avatar" ${avStyle}>${avContent}<div class="fp-status-dot ${f.online?'online':'offline'}"></div></div>
+      <div class="fp-info"><div class="fp-name">${escHtml(f.username)}</div><div class="fp-status-text ${f.online?'online':''}">${f.online?'Online':'Offline'}</div></div>
+      <div class="fp-actions">${inv}<button class="fp-action-btn decline" onclick="removeFriend('${escHtml(f.username)}')" title="Remove">✕</button></div>
+    </div>`;
+  }).join('');
 }
 
 async function sendFriendRequest(){
