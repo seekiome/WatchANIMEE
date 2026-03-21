@@ -183,7 +183,7 @@ app.delete('/api/friends/:friendName', (req, res) => {
 // ── ROOMS ──
 const rooms = {};
 function getRoom(id) {
-  if (!rooms[id]) rooms[id] = { host: null, clients: new Map(), state: { playing: false, time: 0, updatedAt: Date.now() }, hasVideo: false };
+  if (!rooms[id]) rooms[id] = { host: null, clients: new Map(), state: { playing: false, time: 0, updatedAt: Date.now() }, hasVideo: false, videoFile: null };
   return rooms[id];
 }
 function broadcast(roomId, data, exceptWs = null) {
@@ -224,9 +224,8 @@ wss.on('connection', (ws) => {
       const room = getRoom(roomId);
       if (isHost) room.host = ws; else room.clients.set(clientId, ws);
       const currentTime = room.state.playing ? room.state.time + (Date.now() - room.state.updatedAt) / 1000 : room.state.time;
-      sendTo(ws, { type: 'init', hasVideo: room.hasVideo, state: { ...room.state, time: currentTime }, viewers: getViewerCount(room), clientId });
+      sendTo(ws, { type: 'init', hasVideo: room.hasVideo, videoFile: room.videoFile, state: { ...room.state, time: currentTime }, viewers: getViewerCount(room), clientId });
       broadcast(roomId, { type: 'viewers', count: getViewerCount(room) }, ws);
-      if (!isHost && room.hasVideo && room.host) sendTo(room.host, { type: 'peer_request', clientId });
     }
 
     if (msg.type === 'sync' && isHost) {
@@ -237,8 +236,8 @@ wss.on('connection', (ws) => {
     if (msg.type === 'video_ready' && isHost) {
       const room = getRoom(roomId);
       room.hasVideo = true;
-      broadcast(roomId, { type: 'video_ready' }, ws);
-      room.clients.forEach((_, cid) => sendTo(ws, { type: 'peer_request', clientId: cid }));
+      room.videoFile = msg.filename;
+      broadcast(roomId, { type: 'video_ready', filename: msg.filename }, ws);
     }
     if (msg.type === 'offer') { const room = getRoom(roomId); const target = room.clients.get(msg.targetId); if (target) sendTo(target, { type: 'offer', offer: msg.offer }); }
     if (msg.type === 'answer') { const room = getRoom(roomId); if (room.host) sendTo(room.host, { type: 'answer', answer: msg.answer, clientId }); }
@@ -265,6 +264,63 @@ wss.on('connection', (ws) => {
     if (!room.host && room.clients.size === 0) delete rooms[roomId];
   });
 });
+
+const multer = require('multer');
+
+// ── VIDEO UPLOAD ──
+const uploadDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
+
+const storage = multer.diskStorage({
+  destination: uploadDir,
+  filename: (req, file, cb) => {
+    const safe = file.originalname.replace(/[^a-zA-Z0-9.\-_]/g, '_');
+    cb(null, Date.now() + '_' + safe);
+  }
+});
+const upload = multer({ storage, limits: { fileSize: 500 * 1024 * 1024 } });
+
+app.post('/upload/:roomId', upload.single('video'), (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No file' });
+  const room = getRoom(req.params.roomId);
+  room.videoFile = req.file.filename;
+  res.json({ filename: req.file.filename });
+});
+
+function getContentType(filename) {
+  const ext = filename.split('.').pop().toLowerCase();
+  return { mp4:'video/mp4', mkv:'video/x-matroska', avi:'video/x-msvideo', mov:'video/quicktime', webm:'video/webm', m4v:'video/mp4' }[ext] || 'video/mp4';
+}
+
+app.get('/video/:filename', (req, res) => {
+  const filename = req.params.filename.replace(/[^a-zA-Z0-9.\-_]/g, '');
+  const filePath = path.join(uploadDir, filename);
+  if (!fs.existsSync(filePath)) return res.status(404).send('Not found');
+  const stat = fs.statSync(filePath);
+  const fileSize = stat.size;
+  const contentType = getContentType(filename);
+  const range = req.headers.range;
+  if (range) {
+    const parts = range.replace(/bytes=/, '').split('-');
+    const start = parseInt(parts[0], 10);
+    const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+    res.writeHead(206, {
+      'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+      'Accept-Ranges': 'bytes',
+      'Content-Length': end - start + 1,
+      'Content-Type': contentType,
+    });
+    fs.createReadStream(filePath, { start, end }).pipe(res);
+  } else {
+    res.writeHead(200, { 'Content-Length': fileSize, 'Content-Type': contentType });
+    fs.createReadStream(filePath).pipe(res);
+  }
+});
+
+// Explicit favicon routes
+app.get('/favicon.ico', (req,res) => res.sendFile(path.join(__dirname,'public','favicon.ico')));
+app.get('/favicon-32.png', (req,res) => res.sendFile(path.join(__dirname,'public','favicon-32.png')));
+app.get('/favicon-16.png', (req,res) => res.sendFile(path.join(__dirname,'public','favicon-16.png')));
 
 app.use(express.static(path.join(__dirname, 'public')));
 const PORT = process.env.PORT || 3000;
