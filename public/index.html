@@ -220,7 +220,7 @@ body {
 
 
 /* APP */
-#app { display: none; height: 100vh; flex-direction: column; position: relative; z-index: 2; }
+#app { display: none; height: 100vh; max-height: 100vh; flex-direction: column; position: relative; z-index: 2; overflow: hidden; }
 .topbar {
   display: flex; align-items: center; justify-content: space-between;
   padding: .7rem 1.25rem;
@@ -324,8 +324,8 @@ body {
 .player-controls {
   position: relative;
   flex-shrink: 0;
-  background: linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.0) 100%);
-  padding: .5rem 1.25rem .85rem;
+  background: linear-gradient(to top, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.5) 60%, rgba(0,0,0,0.0) 100%);
+  padding: .75rem 1.25rem 1rem;
   z-index: 5;
 }
 
@@ -394,8 +394,8 @@ body {
   width: 100vw !important; height: 100vh !important;
 }
 .video-area.fullscreen #videoPlayer {
-  width: 100% !important; height: calc(100vh - 60px) !important;
-  flex: none !important;
+  width: 100% !important; height: 100vh !important;
+  flex: none !important; object-fit: contain !important;
 }
 .video-area.fullscreen .player-controls {
   position: absolute !important; bottom: 0; left: 0; right: 0;
@@ -775,12 +775,11 @@ body:has(.video-area.fullscreen) .toolbar-row { display: none !important; }
       </div>
 
       <!-- Upload progress -->
-      <div id="uploadProgressWrap" style="display:none;position:absolute;bottom:0;left:0;right:0;padding:1.25rem 1.5rem;background:var(--surface4);border-top:1px solid var(--border2);">
-        <div style="display:flex;justify-content:space-between;margin-bottom:.5rem;font-family:monospace;font-size:.72rem;color:var(--text-muted);">
-          <span>Uploading…</span><span id="uploadPct">0%</span>
-        </div>
-        <div style="height:3px;background:var(--progress-bg);border-radius:2px;overflow:hidden;">
-          <div id="uploadFill" style="height:100%;width:0%;background:var(--accent);border-radius:2px;transition:width .2s;"></div>
+      </div>
+      <div id="uploadProgressWrap" style="display:none;flex-direction:column;align-items:center;justify-content:center;gap:1rem;flex:1;padding:2rem;">
+        <div style="font-family:monospace;font-size:.8rem;color:var(--text-muted);letter-spacing:.06em;">Uploading… <span id="uploadPct">0%</span></div>
+        <div style="width:240px;height:4px;background:var(--progress-bg);border-radius:2px;overflow:hidden;">
+          <div id="uploadFill" style="height:100%;width:0%;background:var(--accent);border-radius:2px;transition:width .15s;"></div>
         </div>
       </div>
       <div class="waiting-screen" id="waitingScreen" style="display:none">
@@ -805,7 +804,7 @@ body:has(.video-area.fullscreen) .toolbar-row { display: none !important; }
       <div class="player-controls" id="controls" style="display:none">
         <!-- Progress bar -->
         <div class="player-progress-wrap">
-          <div class="player-progress-bg" id="progressBg" onclick="seekByClick(event)">
+          <div class="player-progress-bg" id="progressBg" onclick="seekByClick(event)" onmousedown="_dragging=true">
             <div class="player-progress-fill" id="progressFill"></div>
             <div class="player-progress-thumb" id="progressThumb"></div>
           </div>
@@ -1030,7 +1029,8 @@ let ws,roomId,myName,myClientId,isHost=false,isSyncing=false,localFile=null;
 
 function rid(n=6){return Math.random().toString(36).substr(2,n).toUpperCase();}
 function ft(s){s=Math.floor(s||0);const m=Math.floor(s/60),sec=s%60;return`${m}:${sec.toString().padStart(2,'0')}`;}
-function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+const escHtml=esc;
 
 function switchTab(tab){
   document.querySelectorAll('.tab').forEach((t,idx)=>t.classList.toggle('active',(tab==='host'&&idx===0)||(tab==='join'&&idx===1)));
@@ -1066,15 +1066,26 @@ function createRoom(){const n=document.getElementById('hostName').value.trim();i
 function joinRoom(){const n=document.getElementById('joinName').value.trim();const c=document.getElementById('joinCode').value.trim().toUpperCase();if(!n||!c)return;myName=n;isHost=false;roomId=c;startApp();}
 
 function goHome(){
+  // Close peers
+  peers.forEach(pc=>pc.close());peers.clear();
   if(ws){ws.close();ws=null;}
   const v=document.getElementById('videoPlayer');
-  v.src='';v.srcObject=null;v.style.display='none';
+  if(v.src&&v.src.startsWith('blob:'))URL.revokeObjectURL(v.src);
+  v.src='';v.srcObject=null;v.pause();v.style.display='none';
+  // Reset state
+  localFile=null;isHost=false;isSyncing=false;_eventsSetup=false;
   document.getElementById('controls').style.display='none';
   document.getElementById('uploadZone').style.display='none';
   document.getElementById('waitingScreen').style.display='none';
   document.getElementById('messages').innerHTML='';
   document.getElementById('app').style.display='none';
   document.getElementById('lobby').style.display='flex';
+  // Exit fullscreen if active
+  const va=document.querySelector('.video-area');
+  if(va.classList.contains('fullscreen')){
+    va.classList.remove('fullscreen','show-controls');
+    document.querySelector('.toolbar-row').style.display='';
+  }
   history.replaceState(null,'',location.pathname);
 }
 
@@ -1101,39 +1112,57 @@ function connectWS(){
       document.getElementById('viewersCount').textContent=msg.viewers;
       if(msg.hasVideo&&!isHost&&msg.videoFile){
         document.getElementById('waitingText').textContent=i('waitRecv');
-        loadVideo(`/video/${msg.videoFile}`,msg.state);
+        loadVideoFromServer(`/video/${msg.videoFile}`, msg.state);
         sysMsg(i('videoReceived'));
       }
     }
     if(msg.type==='viewers')document.getElementById('viewersCount').textContent=msg.count;
     if(msg.type==='video_ready'&&!isHost){
       document.getElementById('waitingText').textContent=i('waitRecv');
-      loadVideo(`/video/${msg.filename}`,null);
+      loadVideoFromServer(`/video/${msg.filename}`, null);
       sysMsg(i('videoReceived'));
     }
     if(msg.type==='host_left')sysMsg(i('hostLeft'));
-    if(msg.type==='sync'&&!isHost){const v=document.getElementById('videoPlayer');if(!v.src&&!v.srcObject)return;isSyncing=true;if(Math.abs(v.currentTime-msg.time)>0.8)v.currentTime=msg.time;if(msg.playing&&v.paused)v.play().catch(()=>{});if(!msg.playing&&!v.paused)v.pause();setPlayIcon(!msg.playing);setTimeout(()=>isSyncing=false,300);}
+    if(msg.type==='sync'&&!isHost){
+      const v=document.getElementById('videoPlayer');
+      if(!v.src&&!v.srcObject)return;
+      isSyncing=true;
+      // Only seek if drift > 0.5s
+      if(Math.abs(v.currentTime-msg.time)>0.5)v.currentTime=msg.time;
+      if(msg.playing&&v.paused)v.play().catch(()=>{});
+      if(!msg.playing&&!v.paused)v.pause();
+      setPlayIcon(!msg.playing);
+      setTimeout(()=>isSyncing=false,200);
+    }
     if(msg.type==='chat')addMsg(msg.name,msg.text,msg.avatar);
     if(msg.type==='friend_status'||msg.type==='friend_request'||msg.type==='auth_ok') handleFriendWsMsg(msg);
   };
-  ws.onclose=()=>sysMsg(i('disconnected'));
+  ws.onclose=()=>{
+    sysMsg(i('disconnected'));
+    // Auto-reconnect after 3s if still in room
+    if(roomId) setTimeout(()=>{ if(roomId&&(!ws||ws.readyState===3)) connectWS(); },3000);
+  };
 }
 
 function selectVideo(input){
-  const f=input.files[0];if(!f)return;localFile=f;
+  const f=input.files[0]; if(!f) return;
+  localFile=f;
   uploadVideo(f);
 }
 
 async function uploadVideo(file){
   document.getElementById('uploadZone').style.display='none';
-  document.getElementById('uploadProgressWrap').style.display='block';
+
+  // Show progress bar
+  const progressWrap = document.getElementById('uploadProgressWrap');
+  progressWrap.style.display='flex';
+  document.getElementById('uploadPct').textContent='0%';
+  document.getElementById('uploadFill').style.width='0%';
 
   const formData=new FormData();
   formData.append('video',file);
-
   const xhr=new XMLHttpRequest();
   xhr.open('POST',`/upload/${roomId}`);
-
   xhr.upload.onprogress=(e)=>{
     if(e.lengthComputable){
       const pct=Math.round((e.loaded/e.total)*100);
@@ -1141,35 +1170,34 @@ async function uploadVideo(file){
       document.getElementById('uploadFill').style.width=pct+'%';
     }
   };
-
   xhr.onload=()=>{
-    document.getElementById('uploadProgressWrap').style.display='none';
+    progressWrap.style.display='none';
+    if(xhr.status!==200){ sysMsg('Upload failed ('+xhr.status+')'); document.getElementById('uploadZone').style.display='flex'; return; }
     const res=JSON.parse(xhr.responseText);
-    loadVideo(`/video/${res.filename}`);
+    loadVideoFromServer(`/video/${res.filename}`);
     ws.send(JSON.stringify({type:'video_ready',filename:res.filename}));
     sysMsg(i('videoSelected'));
   };
-
   xhr.onerror=()=>{
-    document.getElementById('uploadProgressWrap').style.display='none';
+    progressWrap.style.display='none';
     document.getElementById('uploadZone').style.display='flex';
     sysMsg('Upload failed');
   };
-
   xhr.send(formData);
 }
 
-function loadVideo(src,state){
+function loadVideoFromServer(src, state){
   const video=document.getElementById('videoPlayer');
+  if(video.src) video.src='';
   video.src=src;
+  _eventsSetup=false;
   video.addEventListener('loadedmetadata',()=>{
-    showPlayer();
+    showPlayer(); setupEvents();
     if(state){
       video.currentTime=state.time||0;
       if(state.playing) video.play().catch(()=>{});
     }
   },{once:true});
-  setupEvents();
 }
 
 function showPlayer(){
@@ -1187,7 +1215,9 @@ function showPlayer(){
   }
 }
 
+let _eventsSetup=false;
 function setupEvents(){
+  if(_eventsSetup)return; _eventsSetup=true;
   const v=document.getElementById('videoPlayer');
   v.addEventListener('timeupdate',()=>{
     if(v.duration){
@@ -1196,7 +1226,7 @@ function setupEvents(){
       document.getElementById('progressThumb').style.left=pct+'%';
       document.getElementById('timeLabel').textContent=`${ft(v.currentTime)} / ${ft(v.duration)}`;
     }
-    if(isHost&&!isSyncing)ws.send(JSON.stringify({type:'sync',playing:!v.paused,time:v.currentTime}));
+    if(isHost&&!isSyncing)throttleSync(v);
   });
   v.addEventListener('play',()=>{setPlayIcon(false);syncHost();});
   v.addEventListener('pause',()=>{setPlayIcon(true);syncHost();});
@@ -1221,25 +1251,59 @@ function setPlayIcon(showPlay){
     :'M6 19h4V5H6v14zm8-14v14h4V5h-4z');
 }
 
-function syncHost(){if(!isHost||isSyncing)return;const v=document.getElementById('videoPlayer');ws.send(JSON.stringify({type:'sync',playing:!v.paused,time:v.currentTime}));}
+let _syncTimer=null;
+function throttleSync(v){
+  if(_syncTimer)return;
+  _syncTimer=setTimeout(()=>{
+    _syncTimer=null;
+    if(!isSyncing&&ws&&ws.readyState===1)
+      ws.send(JSON.stringify({type:'sync',playing:!v.paused,time:v.currentTime}));
+  },250);
+}
+function syncHost(){
+  if(!isHost||isSyncing)return;
+  const v=document.getElementById('videoPlayer');
+  if(!v.src&&!v.srcObject)return;
+  if(ws&&ws.readyState===1) ws.send(JSON.stringify({type:'sync',playing:!v.paused,time:v.currentTime}));
+}
 
 function togglePlay(){
+  if(!isHost)return;
   const v=document.getElementById('videoPlayer');
   if(!v.src&&!v.srcObject)return;
   v.paused?v.play():v.pause();
 }
 
 function seekByClick(e){
+  if(!isHost)return;
   const v=document.getElementById('videoPlayer');
   if(!v.duration)return;
-  const bar=e.currentTarget;
+  const bar=document.getElementById('progressBg');
   const rect=bar.getBoundingClientRect();
   const pct=Math.max(0,Math.min(1,(e.clientX-rect.left)/rect.width));
   v.currentTime=pct*v.duration;
   syncHost();
 }
 
+// Progress bar drag
+let _dragging=false;
+(function(){
+  document.addEventListener('mousemove',e=>{
+    if(!_dragging||!isHost)return;
+    const v=document.getElementById('videoPlayer');
+    if(!v.duration)return;
+    const bar=document.getElementById('progressBg');
+    const rect=bar.getBoundingClientRect();
+    const pct=Math.max(0,Math.min(1,(e.clientX-rect.left)/rect.width));
+    v.currentTime=pct*v.duration;
+  });
+  document.addEventListener('mouseup',()=>{
+    if(_dragging){ _dragging=false; syncHost(); }
+  });
+})();
+
 function skipTime(sec){
+  if(!isHost)return;
   const v=document.getElementById('videoPlayer');
   if(!v.duration)return;
   v.currentTime=Math.max(0,Math.min(v.duration,v.currentTime+sec));
@@ -1335,7 +1399,6 @@ function syncFsChat(){
 function p2pShow(t){document.getElementById('p2pStatusText').textContent=t;document.getElementById('p2pStatus').classList.add('show');}
 function p2pHide(){document.getElementById('p2pStatus').classList.remove('show');}
 
-let msgCounter = 0;
 function addMsg(author,text,avatar){
   const m=document.getElementById('messages');
   const d=document.createElement('div');d.className='msg';
