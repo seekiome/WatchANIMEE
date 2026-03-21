@@ -400,6 +400,7 @@ body {
 .video-area.fullscreen .player-controls {
   position: absolute !important; bottom: 0; left: 0; right: 0;
   opacity: 0; transition: opacity .25s;
+  z-index: 20 !important;
 }
 .video-area.fullscreen:hover .player-controls,
 .video-area.fullscreen.show-controls .player-controls { opacity: 1; }
@@ -411,17 +412,20 @@ body:has(.video-area.fullscreen) .toolbar-row { display: none !important; }
 /* Fullscreen chat overlay */
 .fs-chat {
   position: absolute; top: 0; right: 0;
-  width: 300px; height: 100%;
-  background: rgba(0,0,0,0.55);
-  backdrop-filter: blur(12px);
+  width: 240px; height: calc(100% - 80px);
+  background: rgba(0,0,0,0.35);
   display: none; flex-direction: column;
-  z-index: 10;
-  border-left: 1px solid rgba(255,255,255,0.08);
+  z-index: 8;
+  border-left: 1px solid rgba(255,255,255,0.05);
+  pointer-events: none;
 }
 .fs-chat.show { display: flex; }
+.fs-chat .chat-input-wrap { pointer-events: all; }
 .fs-chat .messages {
   flex: 1; padding: .75rem; overflow-y: auto;
-  scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.1) transparent;
+  scrollbar-width: none;
+  mask-image: linear-gradient(to bottom, transparent 0%, black 30%);
+  pointer-events: none;
 }
 .fs-chat .messages .msg-text { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.06); color: rgba(255,255,255,0.85); }
 .fs-chat .messages .msg-author { color: var(--accent); }
@@ -815,11 +819,11 @@ body:has(.video-area.fullscreen) .toolbar-row { display: none !important; }
               <svg id="playIcon" viewBox="0 0 24 24" width="18" height="18"><path d="M5 3l14 9-14 9V3z" fill="currentColor"/></svg>
             </button>
             <!-- Skip back 10s -->
-            <button class="player-btn" onclick="skipTime(-10)">
+            <button class="player-btn skip-btn" onclick="skipTime(-10)">
               <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/><text x="12" y="15" text-anchor="middle" font-size="6" fill="currentColor" stroke="none">10</text></svg>
             </button>
             <!-- Skip forward 10s -->
-            <button class="player-btn" onclick="skipTime(10)">
+            <button class="player-btn skip-btn" onclick="skipTime(10)">
               <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/><text x="12" y="15" text-anchor="middle" font-size="6" fill="currentColor" stroke="none">10</text></svg>
             </button>
             <!-- Volume -->
@@ -1174,7 +1178,13 @@ function showPlayer(){
   document.getElementById('waitingScreen').style.display='none';
   document.getElementById('controls').style.display='block';
   document.getElementById('chatToggleBtn').style.display='flex';
-  if(isHost) document.getElementById('changeVideoBtn').style.display='flex';
+  if(isHost){
+    document.getElementById('changeVideoBtn').style.display='flex';
+  } else {
+    // Viewers: hide play/pause and skip buttons
+    document.getElementById('playPauseBtn').style.display='none';
+    document.querySelectorAll('.skip-btn').forEach(b=>b.style.display='none');
+  }
 }
 
 function setupEvents(){
