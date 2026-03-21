@@ -267,8 +267,8 @@ body {
 .viewers-count svg { width: 13px; height: 13px; stroke: var(--text-muted); fill: none; stroke-width: 1.8; }
 
 .main-layout { display: flex; flex: 1; overflow: hidden; }
-.video-area { flex: 1; display: flex; flex-direction: column; background: var(--video-area-bg); position: relative; }
-#videoPlayer { width: 100%; flex: 1; object-fit: contain; display: none; background: #000; }
+.video-area { flex: 1; display: flex; flex-direction: column; background: var(--video-area-bg); position: relative; min-height: 0; overflow: hidden; }
+#videoPlayer { width: 100%; flex: 1; object-fit: contain; display: none; background: #000; min-height: 0; }
 
 .upload-zone {
   flex: 1; display: flex; flex-direction: column;
@@ -405,6 +405,8 @@ body {
 .video-area.fullscreen.show-controls .player-controls { opacity: 1; }
 .video-area.fullscreen #videoPlayer { cursor: none; }
 .video-area.fullscreen:hover #videoPlayer { cursor: default; }
+.video-area.fullscreen ~ * .toolbar-row,
+body:has(.video-area.fullscreen) .toolbar-row { display: none !important; }
 
 /* Fullscreen chat overlay */
 .fs-chat {
@@ -1273,11 +1275,20 @@ function toggleFullscreen(){
     va.classList.add('fullscreen','show-controls');
     document.getElementById('fsIcon').innerHTML='<path d="M8 3v3a2 2 0 01-2 2H3m18 0h-3a2 2 0 01-2-2V3m0 18v-3a2 2 0 012-2h3M3 16h3a2 2 0 012 2v3"/>';
     setTimeout(()=>va.classList.remove('show-controls'),3000);
+    // Auto-open chat in fullscreen
+    isFsChat=true;
+    document.getElementById('fsChat').classList.add('show');
+    const src=document.getElementById('messages');
+    const dst=document.getElementById('fsChatMessages');
+    dst.innerHTML=src.innerHTML; dst.scrollTop=dst.scrollHeight;
+    // Hide toolbar
+    document.querySelector('.toolbar-row').style.display='none';
   } else {
     va.classList.remove('fullscreen','show-controls');
     document.getElementById('fsIcon').innerHTML='<path d="M8 3H5a2 2 0 00-2 2v3m18 0V5a2 2 0 00-2-2h-3m0 18h3a2 2 0 002-2v-3M3 16v3a2 2 0 002 2h3"/>';
-    // Restore fs chat state
     if(isFsChat){ document.getElementById('fsChat').classList.remove('show'); isFsChat=false; }
+    // Restore toolbar
+    document.querySelector('.toolbar-row').style.display='';
   }
 }
 
