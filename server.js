@@ -106,6 +106,19 @@ app.post('/upload/:roomId', upload.single('video'), (req, res) => {
   res.json({ filename: req.file.filename });
 });
 
+function getContentType(filename) {
+  const ext = filename.split('.').pop().toLowerCase();
+  const types = {
+    mp4: 'video/mp4',
+    mkv: 'video/x-matroska',
+    avi: 'video/x-msvideo',
+    mov: 'video/quicktime',
+    webm: 'video/webm',
+    m4v: 'video/mp4',
+  };
+  return types[ext] || 'video/mp4';
+}
+
 app.get('/video/:filename', (req, res) => {
   const filename = req.params.filename.replace(/[^a-zA-Z0-9.\-_]/g, '');
   const filePath = path.join(uploadDir, filename);
@@ -113,6 +126,7 @@ app.get('/video/:filename', (req, res) => {
 
   const stat = fs.statSync(filePath);
   const fileSize = stat.size;
+  const contentType = getContentType(filename);
   const range = req.headers.range;
 
   if (range) {
@@ -125,11 +139,11 @@ app.get('/video/:filename', (req, res) => {
       'Content-Range': `bytes ${start}-${end}/${fileSize}`,
       'Accept-Ranges': 'bytes',
       'Content-Length': chunkSize,
-      'Content-Type': 'video/mp4',
+      'Content-Type': contentType,
     });
     file.pipe(res);
   } else {
-    res.writeHead(200, { 'Content-Length': fileSize, 'Content-Type': 'video/mp4' });
+    res.writeHead(200, { 'Content-Length': fileSize, 'Content-Type': contentType });
     fs.createReadStream(filePath).pipe(res);
   }
 });
