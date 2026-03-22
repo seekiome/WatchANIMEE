@@ -213,6 +213,139 @@ body:has(.fs-wrapper.fullscreen) .toolbar-row { display:none!important; }
 .modal-overlay { display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:100;align-items:center;justify-content:center;backdrop-filter:blur(4px); }
 .modal-overlay.open { display:flex; }
 .modal { background:var(--surface-modal);border:1px solid var(--border);border-radius:20px;padding:2rem;width:90%;max-width:400px;box-shadow:0 12px 50px rgba(0,0,0,.15); }
+
+/* ── QUEUE POPUP ── */
+.queue-popup {
+  position:fixed; bottom:80px; left:50%; transform:translateX(-50%) translateY(8px);
+  width:min(480px, 92vw);
+  background:var(--surface-modal);
+  border:1px solid var(--border);
+  border-radius:18px;
+  box-shadow:0 16px 60px rgba(0,0,0,0.25);
+  z-index:90;
+  display:none; flex-direction:column;
+  overflow:hidden;
+  backdrop-filter:blur(16px);
+  transition:opacity .2s, transform .2s;
+  opacity:0;
+}
+.queue-popup.open { display:flex; opacity:1; transform:translateX(-50%) translateY(0); }
+
+.queue-header {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:.85rem 1.1rem .7rem;
+  border-bottom:1px solid var(--border2);
+  flex-shrink:0;
+}
+.queue-title {
+  font-family:'Cormorant Garamond',serif; font-size:1rem;
+  color:var(--logo-color); letter-spacing:.06em;
+  display:flex; align-items:center; gap:.5rem;
+}
+.queue-title svg { width:14px;height:14px;stroke:var(--accent);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round; }
+.queue-count {
+  font-family:monospace; font-size:.65rem;
+  background:var(--badge-bg); border:1px solid var(--border-accent);
+  border-radius:10px; padding:.1rem .45rem; color:var(--accent);
+}
+.queue-close {
+  background:none;border:none;cursor:pointer;
+  color:var(--text-muted);font-size:1.1rem;padding:.2rem;
+  transition:color .15s; line-height:1;
+}
+.queue-close:hover { color:var(--text); }
+
+.queue-add-row {
+  padding:.65rem .9rem;
+  border-bottom:1px solid var(--border2);
+  display:flex; gap:.5rem; flex-shrink:0;
+}
+.queue-add-btn {
+  display:flex; align-items:center; gap:.4rem;
+  background:var(--btn-bg); border:1px solid var(--border-accent);
+  border-radius:10px; padding:.5rem .9rem;
+  color:var(--accent2); font-family:'Cormorant Garamond',serif;
+  font-size:.88rem; cursor:pointer; transition:background .15s;
+  white-space:nowrap;
+}
+.queue-add-btn:hover { background:var(--btn-bg-hover); }
+.queue-add-btn svg { width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round; }
+
+.queue-list {
+  flex:1; overflow-y:auto; padding:.5rem .6rem;
+  max-height:320px; min-height:60px;
+  scrollbar-width:thin; scrollbar-color:var(--scrollbar) transparent;
+}
+.queue-empty {
+  padding:2rem 1rem; text-align:center;
+  color:var(--text-faint); font-size:.78rem; font-family:monospace;
+}
+
+.queue-item {
+  display:flex; align-items:center; gap:.6rem;
+  padding:.55rem .5rem; border-radius:10px;
+  transition:background .15s; cursor:default; position:relative;
+  border:1px solid transparent;
+}
+.queue-item:hover { background:var(--btn-bg); }
+.queue-item.dragging { opacity:.4; }
+.queue-item.drag-over { border-color:var(--border-accent); background:var(--btn-bg); }
+.queue-item.active-item { background:var(--btn-active-bg); border-color:var(--border-accent); }
+
+.queue-drag-handle {
+  cursor:grab; color:var(--text-faint); flex-shrink:0;
+  display:flex; align-items:center; padding:.1rem .1rem;
+  transition:color .15s;
+}
+.queue-drag-handle:active { cursor:grabbing; }
+.queue-drag-handle:hover { color:var(--text-muted); }
+.queue-drag-handle svg { width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round; }
+
+.queue-item-num {
+  font-family:monospace; font-size:.62rem;
+  color:var(--text-faint); min-width:16px; text-align:center; flex-shrink:0;
+}
+.queue-item.active-item .queue-item-num { color:var(--accent); }
+
+.queue-item-icon { flex-shrink:0; }
+.queue-item-icon svg { width:14px;height:14px;stroke:var(--text-faint);fill:none;stroke-width:1.8;stroke-linecap:round; }
+.queue-item.active-item .queue-item-icon svg { stroke:var(--accent); }
+
+.queue-item-name {
+  flex:1; min-width:0;
+  font-size:.82rem; color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.queue-item.active-item .queue-item-name { color:var(--logo-color); font-weight:500; }
+
+.queue-item-playing {
+  font-family:monospace; font-size:.6rem; color:var(--accent);
+  letter-spacing:.06em; flex-shrink:0; display:none;
+}
+.queue-item.active-item .queue-item-playing { display:block; }
+
+.queue-delete-btn {
+  width:24px;height:24px; border-radius:6px;
+  border:1px solid transparent; background:transparent;
+  cursor:pointer; display:flex; align-items:center; justify-content:center;
+  color:var(--text-faint); transition:all .15s; flex-shrink:0;
+  opacity:0;
+}
+.queue-item:hover .queue-delete-btn { opacity:1; }
+.queue-delete-btn:hover { border-color:rgba(232,48,106,.3); color:var(--accent); background:var(--btn-bg-hover); }
+.queue-delete-btn svg { width:11px;height:11px;stroke:currentColor;fill:none;stroke-width:2.5;stroke-linecap:round; }
+
+/* Queue button in topbar/controls */
+.queue-btn-badge {
+  position:absolute; top:-3px; right:-3px;
+  min-width:14px; height:14px; border-radius:7px;
+  background:var(--accent); border:2px solid var(--bg-base,#000);
+  font-family:monospace; font-size:.55rem; color:#fff;
+  display:none; align-items:center; justify-content:center;
+  padding:0 2px;
+}
+.queue-btn-badge.show { display:flex; }
 .modal-title { font-family:'Cormorant Garamond',serif;font-size:1.2rem;font-weight:400;color:var(--logo-color);margin-bottom:.35rem;letter-spacing:.06em; }
 .modal-sub { font-size:.72rem;color:var(--text-faint);margin-bottom:1.4rem;font-family:monospace; }
 .copy-row { display:flex;gap:.45rem;margin-bottom:1.2rem; }
@@ -491,6 +624,11 @@ body:has(.fs-wrapper.fullscreen) .toolbar-row { display:none!important; }
               <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
             </button>
             <input type="file" id="fileInputReplace" accept="video/*" style="display:none" onchange="selectVideo(this)">
+            <!-- Queue button (host only) -->
+            <button class="player-btn" id="queueBtn" onclick="toggleQueue()" style="display:none;position:relative" title="Queue">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+              <div class="queue-btn-badge" id="queueBadge"></div>
+            </button>
             <button class="player-btn" id="chatToggleBtn" onclick="toggleFsChat()" style="display:none">
               <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
             </button>
@@ -532,6 +670,28 @@ body:has(.fs-wrapper.fullscreen) .toolbar-row { display:none!important; }
   </div>
 
   </div><!-- /.fs-wrapper -->
+
+<!-- Queue popup -->
+<div class="queue-popup" id="queuePopup">
+  <div class="queue-header">
+    <div class="queue-title">
+      <svg viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+      Queue
+      <span class="queue-count" id="queueCount">0</span>
+    </div>
+    <button class="queue-close" onclick="toggleQueue()">✕</button>
+  </div>
+  <div class="queue-add-row">
+    <button class="queue-add-btn" onclick="document.getElementById('fileInputQueue').click()">
+      <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      Add video
+    </button>
+    <input type="file" id="fileInputQueue" accept="video/*" multiple style="display:none" onchange="addToQueue(this)">
+  </div>
+  <div class="queue-list" id="queueList">
+    <div class="queue-empty" id="queueEmpty">Queue is empty — add videos above</div>
+  </div>
+</div>
 
 <!-- Share modal -->
 <div class="modal-overlay" id="shareModal" onclick="if(event.target===this)closeShare()">
@@ -835,6 +995,11 @@ function goHome(){
   document.getElementById('uploadProgressWrap').style.display='none';
   document.getElementById('messages').innerHTML='';
   document.getElementById('videoArea').classList.remove('has-video');
+  // Reset queue
+  queue = []; queueCurrentIdx = -1; queuePopupOpen = false;
+  document.getElementById('queuePopup').classList.remove('open');
+  const qb = document.getElementById('queueBadge');
+  if(qb) qb.classList.remove('show');
   const va=document.querySelector('.video-area');
   if(va&&va.classList.contains('fullscreen')){
     va.classList.remove('fullscreen','show-controls');
@@ -920,6 +1085,10 @@ function connectWS(){
     }
 
     if(msg.type==='chat') addMsg(msg.name,msg.text,msg.avatar);
+    if(msg.type==='queue_update' && !isHost){
+      // Viewers just receive info, nothing interactive needed
+      // Could show queue badge or notification
+    }
     if(msg.type==='friend_status'||msg.type==='friend_request'||msg.type==='auth_ok') handleFriendWsMsg(msg);
   };
 
@@ -941,7 +1110,21 @@ function showSyncIndicator(){
 // ── VIDEO ──
 function selectVideo(input){
   const f=input.files[0]; if(!f) return;
-  uploadVideo(f);
+  if(isHost){
+    // Add to queue if queue is being used, otherwise just upload directly
+    if(queue.length > 0){
+      queue.push({ id: Date.now()+Math.random(), filename: f.name, file: f, uploaded: false, serverFilename: null });
+      renderQueue(); updateQueueBadge();
+    } else {
+      // First video — add to queue and play
+      queue = [{ id: Date.now(), filename: f.name, file: f, uploaded: false, serverFilename: null }];
+      queueCurrentIdx = 0;
+      renderQueue(); updateQueueBadge();
+      uploadVideo(f);
+    }
+  } else {
+    uploadVideo(f);
+  }
 }
 
 function uploadVideo(file){
@@ -1028,6 +1211,11 @@ function createFormData(file){
       wrap.style.display='none';
       if(xhr.status!==200){ sysMsg('Upload failed ('+xhr.status+')'); document.getElementById('uploadZone').style.display='flex'; return; }
       const res=JSON.parse(xhr.responseText);
+      // Update queue item if it exists
+      if(queue[queueCurrentIdx] && !queue[queueCurrentIdx].uploaded){
+        queue[queueCurrentIdx].uploaded = true;
+        queue[queueCurrentIdx].serverFilename = res.filename;
+      }
       loadVideoFromServer(`/video/${res.filename}`,null,null);
       if(ws&&ws.readyState===1) ws.send(JSON.stringify({type:'video_ready',filename:res.filename}));
       sysMsg(i('videoSelected'));
@@ -1074,6 +1262,7 @@ function showPlayer(){
     document.getElementById('changeVideoBtn').style.display='flex';
     document.getElementById('playPauseBtn').style.display='flex';
     document.querySelectorAll('.skip-btn').forEach(b=>b.style.display='flex');
+    document.getElementById('queueBtn').style.display='flex';
   } else {
     // Viewers: hide play/pause and seek, keep volume
     document.getElementById('playPauseBtn').style.display='none';
@@ -1098,6 +1287,7 @@ function setupEvents(){
   });
   v.addEventListener('play',()=>{ setPlayIcon(false); if(isHost) syncHost(); });
   v.addEventListener('pause',()=>{ setPlayIcon(true); if(isHost) syncHost(); });
+  v.addEventListener('ended', onVideoEnded);
   v.addEventListener('dblclick',toggleFullscreen);
   let hideTimer;
   document.getElementById('fsWrapper').addEventListener('mousemove',()=>{
@@ -1231,6 +1421,224 @@ function sendFsChat(){
   const txt=inp.value.trim(); if(!txt||!ws) return;
   ws.send(JSON.stringify({type:'chat',name:myName,text:txt}));
   inp.value='';
+}
+
+// ── QUEUE ──
+// Each item: { id, filename, file (File object), uploaded (bool), serverFilename }
+let queue = [];
+let queueCurrentIdx = -1;
+let queuePopupOpen = false;
+
+function toggleQueue(){
+  queuePopupOpen = !queuePopupOpen;
+  const popup = document.getElementById('queuePopup');
+  popup.classList.toggle('open', queuePopupOpen);
+}
+
+// Close queue when clicking outside
+document.addEventListener('click', e => {
+  const popup = document.getElementById('queuePopup');
+  const btn = document.getElementById('queueBtn');
+  if(queuePopupOpen && popup && !popup.contains(e.target) && btn && !btn.contains(e.target)){
+    queuePopupOpen = false;
+    popup.classList.remove('open');
+  }
+});
+
+function addToQueue(input){
+  const files = Array.from(input.files);
+  files.forEach(file => {
+    queue.push({ id: Date.now() + Math.random(), filename: file.name, file, uploaded: false, serverFilename: null });
+  });
+  input.value = '';
+  renderQueue();
+  updateQueueBadge();
+  // If nothing is playing yet — start first item automatically
+  if(queueCurrentIdx === -1 && document.getElementById('videoPlayer').style.display === 'none'){
+    playQueueItem(0);
+  }
+}
+
+function removeFromQueue(id){
+  const idx = queue.findIndex(q => q.id === id);
+  if(idx === -1) return;
+  if(idx === queueCurrentIdx){
+    // Skip to next if removing current
+    queue.splice(idx, 1);
+    if(queue.length > 0){
+      queueCurrentIdx = Math.min(idx, queue.length - 1);
+      playQueueItem(queueCurrentIdx);
+    } else {
+      queueCurrentIdx = -1;
+    }
+  } else {
+    queue.splice(idx, 1);
+    if(idx < queueCurrentIdx) queueCurrentIdx--;
+  }
+  renderQueue();
+  updateQueueBadge();
+}
+
+async function playQueueItem(idx){
+  if(idx < 0 || idx >= queue.length) return;
+  queueCurrentIdx = idx;
+  const item = queue[idx];
+  renderQueue();
+
+  // Upload if not yet uploaded
+  if(!item.uploaded){
+    await uploadQueueItem(item);
+  }
+  if(!item.serverFilename) return; // upload failed
+
+  // Load and broadcast
+  loadVideoFromServer(`/video/${item.serverFilename}`, null, null);
+  if(ws && ws.readyState === 1){
+    ws.send(JSON.stringify({ type: 'video_ready', filename: item.serverFilename }));
+  }
+  sysMsg(`▶ Now playing: ${item.filename}`);
+}
+
+function uploadQueueItem(item){
+  return new Promise(resolve => {
+    const wrap = document.getElementById('uploadProgressWrap');
+    wrap.style.display = 'flex';
+    document.getElementById('uploadZone').style.display = 'none';
+    document.getElementById('uploadPct').textContent = '0%';
+    document.getElementById('uploadFill').style.width = '0%';
+    document.getElementById('uploadInfo').textContent = `Uploading: ${item.filename}`;
+
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', `/upload/${roomId}`);
+    const start = Date.now();
+
+    xhr.upload.onprogress = e => {
+      if(e.lengthComputable){
+        const pct = Math.round(e.loaded/e.total*100);
+        const spd = e.loaded/((Date.now()-start)/1000||1);
+        const eta = (e.total-e.loaded)/spd;
+        document.getElementById('uploadPct').textContent = pct+'%';
+        document.getElementById('uploadFill').style.width = pct+'%';
+        const sStr = spd>1048576?`${(spd/1048576).toFixed(1)} MB/s`:`${(spd/1024).toFixed(0)} KB/s`;
+        const eStr = isFinite(eta)?(eta>60?`${Math.ceil(eta/60)}m`:`${Math.ceil(eta)}s`):'';
+        document.getElementById('uploadInfo').textContent = `${item.filename} · ${sStr}${eStr?' · '+eStr+' left':''}`;
+      }
+    };
+    xhr.onload = () => {
+      wrap.style.display = 'none';
+      if(xhr.status === 200){
+        const res = JSON.parse(xhr.responseText);
+        item.uploaded = true;
+        item.serverFilename = res.filename;
+      } else {
+        sysMsg(`Upload failed for ${item.filename}`);
+      }
+      resolve();
+    };
+    xhr.onerror = () => { wrap.style.display='none'; sysMsg('Upload error'); resolve(); };
+    xhr.send(createFormData(item.file));
+  });
+}
+
+function renderQueue(){
+  const list = document.getElementById('queueList');
+  const empty = document.getElementById('queueEmpty');
+  const countEl = document.getElementById('queueCount');
+  countEl.textContent = queue.length;
+
+  if(queue.length === 0){
+    empty.style.display = 'block';
+    list.innerHTML = '';
+    list.appendChild(empty);
+    return;
+  }
+  empty.style.display = 'none';
+
+  // Re-render items
+  list.innerHTML = '';
+  queue.forEach((item, idx) => {
+    const isActive = idx === queueCurrentIdx;
+    const div = document.createElement('div');
+    div.className = 'queue-item' + (isActive ? ' active-item' : '');
+    div.dataset.id = item.id;
+    div.dataset.idx = idx;
+    div.draggable = true;
+
+    // Shorten name: remove extension + trim
+    const shortName = item.filename.replace(/\.[^.]+$/,'').replace(/_/g,' ');
+
+    div.innerHTML = `
+      <div class="queue-drag-handle" title="Drag to reorder">
+        <svg viewBox="0 0 24 24"><line x1="8" y1="6" x2="16" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="8" y1="18" x2="16" y2="18"/></svg>
+      </div>
+      <div class="queue-item-num">${idx+1}</div>
+      <div class="queue-item-icon">
+        <svg viewBox="0 0 24 24"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+      </div>
+      <div class="queue-item-name" title="${esc(item.filename)}">${esc(shortName)}</div>
+      <div class="queue-item-playing">▶ NOW</div>
+      <button class="queue-delete-btn" onclick="removeFromQueue(${item.id})" title="Remove">
+        <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>`;
+
+    // Double click to play
+    div.addEventListener('dblclick', () => playQueueItem(idx));
+
+    // Drag & drop
+    div.addEventListener('dragstart', e => {
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', idx);
+      div.classList.add('dragging');
+    });
+    div.addEventListener('dragend', () => div.classList.remove('dragging'));
+    div.addEventListener('dragover', e => { e.preventDefault(); div.classList.add('drag-over'); });
+    div.addEventListener('dragleave', () => div.classList.remove('drag-over'));
+    div.addEventListener('drop', e => {
+      e.preventDefault();
+      div.classList.remove('drag-over');
+      const fromIdx = parseInt(e.dataTransfer.getData('text/plain'));
+      const toIdx = idx;
+      if(fromIdx === toIdx) return;
+      const moved = queue.splice(fromIdx, 1)[0];
+      queue.splice(toIdx, 0, moved);
+      // Adjust current index
+      if(queueCurrentIdx === fromIdx) queueCurrentIdx = toIdx;
+      else if(fromIdx < queueCurrentIdx && toIdx >= queueCurrentIdx) queueCurrentIdx--;
+      else if(fromIdx > queueCurrentIdx && toIdx <= queueCurrentIdx) queueCurrentIdx++;
+      renderQueue();
+      // Broadcast new queue order
+      broadcastQueue();
+    });
+
+    list.appendChild(div);
+  });
+}
+
+function updateQueueBadge(){
+  const badge = document.getElementById('queueBadge');
+  if(!badge) return;
+  const remaining = queue.length - (queueCurrentIdx + 1);
+  if(remaining > 0){ badge.textContent = remaining; badge.classList.add('show'); }
+  else badge.classList.remove('show');
+}
+
+function broadcastQueue(){
+  if(!ws || ws.readyState !== 1 || !isHost) return;
+  ws.send(JSON.stringify({
+    type: 'queue_update',
+    queue: queue.map((q,i) => ({ idx:i, filename: q.filename, serverFilename: q.serverFilename, uploaded: q.uploaded })),
+    currentIdx: queueCurrentIdx
+  }));
+}
+
+// Auto-play next when video ends
+function onVideoEnded(){
+  if(!isHost) return;
+  const nextIdx = queueCurrentIdx + 1;
+  if(nextIdx < queue.length){
+    playQueueItem(nextIdx);
+    updateQueueBadge();
+  }
 }
 
 // ── CHAT ──
