@@ -146,26 +146,31 @@ body { background: var(--bg-base); color: var(--text); font-family: 'Cormorant G
   pointer-events:none;
 }
 .player-controls.visible { opacity:1; pointer-events:all; }
-/* Video fills entire video-area — controls float on top, NO letterbox */
+
+/* ── VIDEO PLAYER ── */
 #videoPlayer {
   width:100%; height:100%;
   object-fit:contain;
   display:none; background:#000;
   position:absolute; inset:0;
-  /* Suppress all browser native video UI */
   -webkit-media-controls: none;
 }
-/* Hide ALL browser native video controls in every browser */
-#videoPlayer::-webkit-media-controls { display:none!important; }
-#videoPlayer::-webkit-media-controls-enclosure { display:none!important; }
+#videoPlayer::-webkit-media-controls,
+#videoPlayer::-webkit-media-controls-enclosure,
 #videoPlayer::-webkit-media-controls-panel { display:none!important; }
-#videoPlayer::-moz-media-controls { display:none!important; }
-/* Fullscreen: video fills 100% of wrapper — no black bars from browser chrome */
-.fs-wrapper.fullscreen #videoPlayer {
-  width:100vw!important; height:100vh!important;
-  position:fixed!important; inset:0!important;
+
+/* In fs-mode — video goes truly fullscreen, covering everything */
+#app.fs-mode #videoPlayer {
+  position:fixed!important;
+  inset:0!important;
+  width:100vw!important;
+  height:100vh!important;
+  z-index:1!important;
   object-fit:contain!important;
 }
+/* Controls and chat float above video in fs-mode */
+#app.fs-mode .player-controls { z-index:3!important; }
+#app.fs-mode .fs-chat { z-index:2!important; position:fixed!important; top:0!important; right:0!important; height:100vh!important; }
 .video-area { flex:1;min-width:0;min-height:0;display:flex;flex-direction:column;background:transparent;position:relative;overflow:hidden; }
 .video-area.has-video { background:#000; }
 .player-progress-wrap { display:flex;align-items:center;gap:.75rem;margin-bottom:.5rem; }
@@ -191,33 +196,22 @@ body { background: var(--bg-base); color: var(--text); font-family: 'Cormorant G
 .fs-wrapper .main-layout { flex:1;min-height:0; }
 
 /* ── FULLSCREEN MODE — class on #app ── */
-#app.fs-mode { position:fixed!important;inset:0!important;z-index:9999!important;background:#000!important;display:flex!important;flex-direction:column!important; }
-/* Hide topbar in fs */
+/* In fs-mode: topbar hidden, toolbar hidden, sidebar hidden */
 #app.fs-mode .topbar { display:none!important; }
-/* fs-wrapper becomes full remaining height, row layout */
-#app.fs-mode .fs-wrapper { flex-direction:row!important;flex:1!important; }
-/* main-layout fills all minus chat */
-#app.fs-mode .main-layout { flex:1;min-width:0;position:relative; }
-/* Hide regular sidebar */
 #app.fs-mode .sidebar { display:none!important; }
-/* video-area fills all */
-#app.fs-mode .video-area { background:#000!important;flex:1; }
-/* Video fills entire area */
-#app.fs-mode #videoPlayer { width:100%!important;height:100%!important;position:absolute!important;inset:0!important;object-fit:contain!important; }
-/* cursor autohide */
+body:has(#app.fs-mode) .toolbar-row { display:none!important; }
+/* cursor */
 #app.fs-mode #videoPlayer { cursor:none; }
 #app.fs-mode.show-ctrl #videoPlayer { cursor:default; }
-/* toolbar hidden */
-body:has(#app.fs-mode) .toolbar-row { display:none!important; }
-
-/* FS Chat visible in fs-mode */
+/* FS Chat visible */
 #app.fs-mode .fs-chat { display:flex!important; }
 #app.fs-mode .fs-chat.show { width:280px!important; }
 
-/* FS Chat — flex sibling in fullscreen, hidden in normal mode */
+/* FS Chat — hidden by default, shown in fs-mode */
 .fs-chat { display:none; width:0; flex-shrink:0; overflow:hidden; transition:width .2s ease; flex-direction:column; background:var(--surface3); border-left:1px solid var(--border); }
-.fs-wrapper.fullscreen .fs-chat { display:flex; }
-.fs-wrapper.fullscreen .fs-chat.show { width:260px; }
+/* In fs-mode: fixed right panel */
+#app.fs-mode .fs-chat { display:flex; position:fixed; right:-280px; top:0; height:100vh; width:280px; z-index:2; transition:right .2s ease; border-left:1px solid var(--border); }
+#app.fs-mode .fs-chat.show { right:0!important; }
 .fs-chat .messages { flex:1;padding:.75rem;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--scrollbar) transparent;min-height:0; }
 .fs-chat .messages .msg-text { background:var(--msg-bg);border-color:var(--border2);color:var(--text); }
 .fs-chat .messages .msg-author { color:var(--accent); }
