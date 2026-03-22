@@ -186,62 +186,33 @@ body { background: var(--bg-base); color: var(--text); font-family: 'Cormorant G
 .codec-warning { position:absolute;top:1rem;left:50%;transform:translateX(-50%);background:rgba(200,80,40,0.92);border-radius:10px;padding:.5rem 1rem;font-family:monospace;font-size:.72rem;color:#fff;z-index:15;white-space:nowrap;display:none; }
 .codec-warning.show { display:block; }
 
-/* FS WRAPPER — contains main-layout + fs-chat, used for fullscreen */
+/* FS WRAPPER */
 .fs-wrapper { display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden; }
 .fs-wrapper .main-layout { flex:1;min-height:0; }
 
-/* FULLSCREEN — triggered by native Fullscreen API */
-/* :fullscreen applies when fsWrapper is the fullscreen element */
-#fsWrapper:fullscreen,
-#fsWrapper:-webkit-full-screen,
-#fsWrapper:-moz-full-screen,
-.fs-wrapper.fullscreen {
-  position:fixed!important; inset:0!important; z-index:1000!important;
-  background:#000!important; flex-direction:row!important; display:flex!important;
-  width:100vw!important; height:100vh!important;
-}
-#fsWrapper:fullscreen .main-layout,
-#fsWrapper:-webkit-full-screen .main-layout,
-.fs-wrapper.fullscreen .main-layout { flex:1;min-width:0;position:relative; }
+/* ── FULLSCREEN MODE — class on #app ── */
+#app.fs-mode { position:fixed!important;inset:0!important;z-index:9999!important;background:#000!important;display:flex!important;flex-direction:column!important; }
+/* Hide topbar in fs */
+#app.fs-mode .topbar { display:none!important; }
+/* fs-wrapper becomes full remaining height, row layout */
+#app.fs-mode .fs-wrapper { flex-direction:row!important;flex:1!important; }
+/* main-layout fills all minus chat */
+#app.fs-mode .main-layout { flex:1;min-width:0;position:relative; }
+/* Hide regular sidebar */
+#app.fs-mode .sidebar { display:none!important; }
+/* video-area fills all */
+#app.fs-mode .video-area { background:#000!important;flex:1; }
+/* Video fills entire area */
+#app.fs-mode #videoPlayer { width:100%!important;height:100%!important;position:absolute!important;inset:0!important;object-fit:contain!important; }
+/* cursor autohide */
+#app.fs-mode #videoPlayer { cursor:none; }
+#app.fs-mode.show-ctrl #videoPlayer { cursor:default; }
+/* toolbar hidden */
+body:has(#app.fs-mode) .toolbar-row { display:none!important; }
 
-#fsWrapper:fullscreen .sidebar,
-#fsWrapper:-webkit-full-screen .sidebar,
-.fs-wrapper.fullscreen .sidebar { display:none!important; }
-
-#fsWrapper:fullscreen .video-area,
-#fsWrapper:-webkit-full-screen .video-area,
-.fs-wrapper.fullscreen .video-area { background:#000!important; }
-
-#fsWrapper:fullscreen #videoPlayer,
-#fsWrapper:-webkit-full-screen #videoPlayer,
-.fs-wrapper.fullscreen #videoPlayer {
-  width:100%!important; height:100%!important;
-  position:absolute!important; inset:0!important;
-  object-fit:contain!important;
-}
-/* Autohide cursor */
-#fsWrapper:fullscreen #videoPlayer,
-#fsWrapper:-webkit-full-screen #videoPlayer,
-.fs-wrapper.fullscreen #videoPlayer { cursor:none; }
-#fsWrapper:fullscreen.show-controls #videoPlayer,
-#fsWrapper:-webkit-full-screen.show-controls #videoPlayer,
-.fs-wrapper.fullscreen.show-controls #videoPlayer { cursor:default; }
-
-/* Hide topbar/toolbar when fullscreen */
-body:has(#fsWrapper:fullscreen) .topbar,
-body:has(#fsWrapper:-webkit-full-screen) .topbar,
-body:has(.fs-wrapper.fullscreen) .topbar { display:none!important; }
-body:has(#fsWrapper:fullscreen) .toolbar-row,
-body:has(#fsWrapper:-webkit-full-screen) .toolbar-row,
-body:has(.fs-wrapper.fullscreen) .toolbar-row { display:none!important; }
-
-/* FS Chat in fullscreen */
-#fsWrapper:fullscreen .fs-chat,
-#fsWrapper:-webkit-full-screen .fs-chat,
-.fs-wrapper.fullscreen .fs-chat { display:flex; }
-#fsWrapper:fullscreen .fs-chat.show,
-#fsWrapper:-webkit-full-screen .fs-chat.show,
-.fs-wrapper.fullscreen .fs-chat.show { width:260px; }
+/* FS Chat visible in fs-mode */
+#app.fs-mode .fs-chat { display:flex!important; }
+#app.fs-mode .fs-chat.show { width:280px!important; }
 
 /* FS Chat — flex sibling in fullscreen, hidden in normal mode */
 .fs-chat { display:none; width:0; flex-shrink:0; overflow:hidden; transition:width .2s ease; flex-direction:column; background:var(--surface3); border-left:1px solid var(--border); }
@@ -1061,9 +1032,9 @@ function goHome(){
   document.getElementById('queuePopup').classList.remove('open');
   const qb = document.getElementById('queueBadge');
   if(qb) qb.classList.remove('show');
-  const va=document.querySelector('.video-area');
-  if(va&&va.classList.contains('fullscreen')){
-    va.classList.remove('fullscreen','show-controls');
+  const app=document.getElementById('app');
+  if(app.classList.contains('fs-mode')){
+    app.classList.remove('fs-mode','show-ctrl');
     document.querySelector('.toolbar-row').style.display='';
   }
   document.getElementById('app').style.display='none';
@@ -1384,12 +1355,12 @@ function setupEvents(){
   const va=document.getElementById('videoArea');
   va.addEventListener('mousemove',()=>{
     showControls();
-    const wrapper=document.getElementById('fsWrapper');
-    if(wrapper.classList.contains('fullscreen')) wrapper.classList.add('show-controls');
+    const app=document.getElementById('app');
+    if(app.classList.contains('fs-mode')) app.classList.add('show-ctrl');
   });
   va.addEventListener('mouseleave',()=>{
-    const wrapper=document.getElementById('fsWrapper');
-    wrapper.classList.remove('show-controls');
+    const app=document.getElementById('app');
+    app.classList.remove('show-ctrl');
   });
   // Touch support
   va.addEventListener('touchstart',()=>showControls(),{passive:true});
@@ -1519,31 +1490,15 @@ function updateVolIcon(vol){
 
 // ── FULLSCREEN ──
 let isFsChat = false;
+let _isFsMode = false;
+let _fsCtrlTimer = null;
 
 function toggleFullscreen(){
-  const wrapper = document.getElementById('fsWrapper');
-  const isFs = !!document.fullscreenElement || !!document.webkitFullscreenElement;
+  _isFsMode = !_isFsMode;
+  const app = document.getElementById('app');
+  app.classList.toggle('fs-mode', _isFsMode);
 
-  if(!isFs){
-    // Enter fullscreen — request on wrapper so our UI stays inside
-    const el = wrapper;
-    if(el.requestFullscreen) el.requestFullscreen();
-    else if(el.webkitRequestFullscreen) el.webkitRequestFullscreen();
-    else if(el.mozRequestFullScreen) el.mozRequestFullScreen();
-  } else {
-    if(document.exitFullscreen) document.exitFullscreen();
-    else if(document.webkitExitFullscreen) document.webkitExitFullscreen();
-    else if(document.mozCancelFullScreen) document.mozCancelFullScreen();
-  }
-}
-
-// Listen to fullscreen change events (covers F11, Esc, browser button)
-function onFullscreenChange(){
-  const wrapper = document.getElementById('fsWrapper');
-  const isFs = !!document.fullscreenElement || !!document.webkitFullscreenElement;
-
-  if(isFs){
-    wrapper.classList.add('fullscreen');
+  if(_isFsMode){
     document.getElementById('fsIcon').innerHTML='<path d="M8 3v3a2 2 0 01-2 2H3m18 0h-3a2 2 0 01-2-2V3m0 18v-3a2 2 0 012-2h3M3 16h3a2 2 0 012 2v3"/>';
     // Show chat
     isFsChat = true;
@@ -1551,19 +1506,17 @@ function onFullscreenChange(){
     syncFsChat();
     showControls();
   } else {
-    wrapper.classList.remove('fullscreen','show-controls');
     document.getElementById('fsIcon').innerHTML='<path d="M8 3H5a2 2 0 00-2 2v3m18 0V5a2 2 0 00-2-2h-3m0 18h3a2 2 0 002-2v-3M3 16v3a2 2 0 002 2h3"/>';
     document.getElementById('fsChat').classList.remove('show');
     isFsChat = false;
+    app.classList.remove('show-ctrl');
   }
 }
-document.addEventListener('fullscreenchange', onFullscreenChange);
-document.addEventListener('webkitfullscreenchange', onFullscreenChange);
-document.addEventListener('mozfullscreenchange', onFullscreenChange);
 
+// Remove Fullscreen API listeners — not needed
 function toggleFsChat(){
-  isFsChat=!isFsChat;
-  document.getElementById('fsChat').classList.toggle('show',isFsChat);
+  isFsChat = !isFsChat;
+  document.getElementById('fsChat').classList.toggle('show', isFsChat);
   if(isFsChat) syncFsChat();
 }
 function syncFsChat(){
