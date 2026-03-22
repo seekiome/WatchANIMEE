@@ -1006,9 +1006,7 @@ function connectWS(){
 
     if(msg.type==='video_ready'&&!isHost){
       document.getElementById('waitingText').textContent=i('waitRecv');
-      // FIX [HIGH-3]: используем streamUrl вместо прямого filename
-      const streamUrl=msg.streamUrl+(authToken?`?token=${encodeURIComponent(authToken)}`:'');
-      loadVideoFromServer(streamUrl, msg.state||null, msg.serverTime||null);
+      loadVideoFromServer(msg.streamUrl, msg.state||null, msg.serverTime||null);
       sysMsg(i('videoReceived'));
     }
     if(msg.type==='host_left') sysMsg(i('hostLeft'));
@@ -1103,16 +1101,14 @@ function uploadVideo(file){
   };
   xhr.onload=()=>{
     wrap.style.display='none';
-    if(xhr.status===401){ sysMsg('Upload requires sign-in'); document.getElementById('uploadZone').style.display='flex'; return; }
     if(xhr.status!==200){ sysMsg('Upload failed ('+xhr.status+')'); document.getElementById('uploadZone').style.display='flex'; return; }
     const res=JSON.parse(xhr.responseText);
-    // FIX [HIGH-3]: сервер возвращает streamUrl, не filename
+    // сервер возвращает streamUrl
     if(queue[queueCurrentIdx]&&!queue[queueCurrentIdx].uploaded){
       queue[queueCurrentIdx].uploaded=true;
       queue[queueCurrentIdx].streamUrl=res.streamUrl;
     }
-    const streamUrl=res.streamUrl+(authToken?`?token=${encodeURIComponent(authToken)}`:'');
-    loadVideoFromServer(streamUrl,null,null);
+    loadVideoFromServer(res.streamUrl,null,null);
     if(ws&&ws.readyState===1) ws.send(JSON.stringify({
       type:'video_ready',
       origName:res.origName
@@ -1464,8 +1460,7 @@ async function playQueueItem(idx){
   renderQueue();
   if(!item.uploaded){ await uploadQueueItem(item); }
   if(!item.streamUrl) return;
-  const streamUrl=item.streamUrl+(authToken?`?token=${encodeURIComponent(authToken)}`:'');
-  loadVideoFromServer(streamUrl,null,null);
+  loadVideoFromServer(item.streamUrl,null,null);
   if(ws&&ws.readyState===1){
     ws.send(JSON.stringify({type:'video_ready',origName:item.filename}));
   }
