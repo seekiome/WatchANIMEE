@@ -594,14 +594,13 @@ const upload = multer({
   }
 });
 
-// FIX [CRIT-2]: upload требует валидного токена сессии
+// Upload: авторизация опциональна (гостевой режим), но roomId должен быть валидным
 app.post('/upload/:roomId', (req, res) => {
-  const token = req.headers.authorization?.replace('Bearer ', '');
-  const username = getSession(token);
-  if (!username) return res.status(401).json({ error: 'Unauthorized' });
-
-  // Проверяем что пользователь находится в комнате как хост
   const roomId = req.params.roomId;
+  // Валидация roomId
+  if (!roomId || !/^[A-Z0-9]{4,10}$/i.test(roomId)) {
+    return res.status(400).json({ error: 'Invalid room ID' });
+  }
   const room = rooms[roomId];
   // Разрешаем загрузку если комната существует или создаётся
   // (хост загружает до или после join)
@@ -666,14 +665,9 @@ function getContentType(filename) {
 }
 
 app.get('/video-stream/:roomId', (req, res) => {
-  // Принимаем токен из query-param (для <video src="...?token=...">)
-  const token = req.headers.authorization?.replace('Bearer ', '') || req.query.token;
-  const username = getSession(token);
-  if (!username) return res.status(401).send('Unauthorized');
-
   const roomId = req.params.roomId;
-  // FIX [MED-4]: проверка path traversal
-  if (!/^[A-Z0-9]{4,10}$/.test(roomId)) return res.status(400).send('Invalid room ID');
+  // Валидация roomId — защита от path traversal
+  if (!/^[A-Z0-9]{4,10}$/i.test(roomId)) return res.status(400).send('Invalid room ID');
 
   const room = rooms[roomId];
   if (!room || !room.videoFile) return res.status(404).send('No video in this room');
