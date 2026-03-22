@@ -112,8 +112,6 @@ body { background: var(--bg-base); color: var(--text); font-family: 'Cormorant G
 
 .main-layout { display:flex;flex-direction:row;flex:1;min-height:0;overflow:hidden;width:100%; }
 .video-area { flex:1;min-width:0;min-height:0;display:flex;flex-direction:column;background:transparent;position:relative;overflow:hidden; }
-/* Video fills all available space, controls sit below */
-#videoPlayer { width:100%;flex:1;object-fit:contain;display:none;background:#000;min-height:0;max-height:100%; }
 /* Black bg only when video is active */
 .video-area.has-video { background:#000; }
 
@@ -148,8 +146,26 @@ body { background: var(--bg-base); color: var(--text); font-family: 'Cormorant G
   pointer-events:none;
 }
 .player-controls.visible { opacity:1; pointer-events:all; }
-/* Video fills entire video-area — controls float on top */
-#videoPlayer { width:100%;height:100%;object-fit:contain;display:none;background:#000;position:absolute;inset:0; }
+/* Video fills entire video-area — controls float on top, NO letterbox */
+#videoPlayer {
+  width:100%; height:100%;
+  object-fit:contain;
+  display:none; background:#000;
+  position:absolute; inset:0;
+  /* Suppress all browser native video UI */
+  -webkit-media-controls: none;
+}
+/* Hide ALL browser native video controls in every browser */
+#videoPlayer::-webkit-media-controls { display:none!important; }
+#videoPlayer::-webkit-media-controls-enclosure { display:none!important; }
+#videoPlayer::-webkit-media-controls-panel { display:none!important; }
+#videoPlayer::-moz-media-controls { display:none!important; }
+/* Fullscreen: video fills 100% of wrapper — no black bars from browser chrome */
+.fs-wrapper.fullscreen #videoPlayer {
+  width:100vw!important; height:100vh!important;
+  position:fixed!important; inset:0!important;
+  object-fit:contain!important;
+}
 .video-area { flex:1;min-width:0;min-height:0;display:flex;flex-direction:column;background:transparent;position:relative;overflow:hidden; }
 .video-area.has-video { background:#000; }
 .player-progress-wrap { display:flex;align-items:center;gap:.75rem;margin-bottom:.5rem; }
@@ -176,10 +192,9 @@ body { background: var(--bg-base); color: var(--text); font-family: 'Cormorant G
 
 /* FULLSCREEN — applied to fs-wrapper */
 .fs-wrapper.fullscreen { position:fixed!important;inset:0!important;z-index:1000!important;background:#000!important;flex-direction:row!important;display:flex!important; }
-.fs-wrapper.fullscreen .main-layout { flex:1;min-width:0; }
+.fs-wrapper.fullscreen .main-layout { flex:1;min-width:0;position:relative; }
 .fs-wrapper.fullscreen .sidebar { display:none!important; }
-.fs-wrapper.fullscreen .video-area { background:#000!important; }
-.fs-wrapper.fullscreen #videoPlayer { width:100%!important;height:100%!important;object-fit:contain!important; }
+.fs-wrapper.fullscreen .video-area { background:#000!important;position:static!important; }
 /* Controls use .visible class — same autohide system */
 .fs-wrapper.fullscreen #videoPlayer { cursor:none; }
 .fs-wrapper.fullscreen.show-controls #videoPlayer { cursor:default; }
@@ -187,16 +202,16 @@ body:has(.fs-wrapper.fullscreen) .topbar { display:none!important; }
 body:has(.fs-wrapper.fullscreen) .toolbar-row { display:none!important; }
 
 /* FS Chat — flex sibling in fullscreen, hidden in normal mode */
-.fs-chat { display:none; width:0; flex-shrink:0; overflow:hidden; transition:width .2s ease; flex-direction:column; background:rgba(10,10,10,0.95); border-left:1px solid rgba(255,255,255,0.08); }
+.fs-chat { display:none; width:0; flex-shrink:0; overflow:hidden; transition:width .2s ease; flex-direction:column; background:var(--surface3); border-left:1px solid var(--border); }
 .fs-wrapper.fullscreen .fs-chat { display:flex; }
 .fs-wrapper.fullscreen .fs-chat.show { width:260px; }
-.fs-chat .messages { flex:1;padding:.75rem;overflow-y:auto;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,0.1) transparent;min-height:0; }
-.fs-chat .messages .msg-text { background:rgba(255,255,255,0.07);border-color:rgba(255,255,255,0.05);color:rgba(255,255,255,0.85); }
+.fs-chat .messages { flex:1;padding:.75rem;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--scrollbar) transparent;min-height:0; }
+.fs-chat .messages .msg-text { background:var(--msg-bg);border-color:var(--border2);color:var(--text); }
 .fs-chat .messages .msg-author { color:var(--accent); }
-.fs-chat .messages .msg-system .msg-text { color:rgba(255,255,255,0.3); }
-.fs-chat .chat-input-wrap { border-top:1px solid rgba(255,255,255,0.08);padding:.5rem;flex-shrink:0;display:flex;gap:.4rem; }
-.fs-chat .chat-input { background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);color:#fff;border-radius:8px;padding:.5rem .7rem;font-size:.82rem;outline:none;flex:1; }
-.fs-chat .chat-input::placeholder { color:rgba(255,255,255,0.25); }
+.fs-chat .messages .msg-system .msg-text { color:var(--text-faint); }
+.fs-chat .chat-input-wrap { border-top:1px solid var(--border2);padding:.5rem;flex-shrink:0;display:flex;gap:.4rem; }
+.fs-chat .chat-input { background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:.5rem .7rem;font-size:.82rem;outline:none;flex:1; }
+.fs-chat .chat-input::placeholder { color:var(--text-faint); }
 .fs-chat-header { flex-shrink:0; }
 
 /* SIDEBAR */
@@ -590,7 +605,7 @@ body:has(.fs-wrapper.fullscreen) .toolbar-row { display:none!important; }
         <div class="waiting-text" id="waitingText">Waiting for host…</div>
       </div>
 
-      <video id="videoPlayer" disablepictureinpicture controlslist="nodownload nofullscreen noremoteplayback" x-webkit-airplay="deny"></video>
+      <video id="videoPlayer" disablepictureinpicture disableremoteplayback controlslist="nodownload nofullscreen noremoteplayback noplaybackrate" x-webkit-airplay="deny" webkit-playsinline playsinline></video>
 
       <!-- Chrome codec warning -->
       <div class="codec-warning" id="codecWarning">⚠ MKV/HEVC may not play in Chrome — try MP4 or use Opera/Edge</div>
@@ -611,12 +626,6 @@ body:has(.fs-wrapper.fullscreen) .toolbar-row { display:none!important; }
           <div class="player-left">
             <button class="player-btn" id="playPauseBtn" onclick="togglePlay()">
               <svg id="playIcon" viewBox="0 0 24 24" width="18" height="18"><path d="M5 3l14 9-14 9V3z" fill="currentColor"/></svg>
-            </button>
-            <button class="player-btn skip-btn" onclick="skipTime(-10)">
-              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/><text x="12" y="15" text-anchor="middle" font-size="6" fill="currentColor" stroke="none">10</text></svg>
-            </button>
-            <button class="player-btn skip-btn" onclick="skipTime(10)">
-              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/><text x="12" y="15" text-anchor="middle" font-size="6" fill="currentColor" stroke="none">10</text></svg>
             </button>
             <!-- Volume — available to ALL users -->
             <div class="player-vol-wrap">
@@ -1271,7 +1280,6 @@ function showPlayer(){
   if(isHost){
     document.getElementById('changeVideoBtn').style.display='flex';
     document.getElementById('playPauseBtn').style.display='flex';
-    document.querySelectorAll('.skip-btn').forEach(b=>b.style.display='flex');
     document.getElementById('queueBtn').style.display='flex';
   } else {
     // Viewers: hide play/pause and seek, keep volume
@@ -1386,18 +1394,28 @@ function seekByClick(e){
   const v=document.getElementById('videoPlayer');
   if(!v.duration) return;
   const rect=document.getElementById('progressBg').getBoundingClientRect();
-  v.currentTime=Math.max(0,Math.min(1,(e.clientX-rect.left)/rect.width))*v.duration;
+  const pct=Math.max(0,Math.min(1,(e.clientX-rect.left)/rect.width));
+  v.currentTime=pct*v.duration;
+  // Update bar visually immediately
+  document.getElementById('progressFill').style.width=(pct*100)+'%';
+  document.getElementById('progressThumb').style.left=(pct*100)+'%';
   syncHost();
 }
 
 let _dragging=false;
-function startDrag(e){ if(isHost) _dragging=true; }
+function startDrag(e){ if(isHost){ _dragging=true; e.preventDefault(); } }
 document.addEventListener('mousemove',e=>{
   if(!_dragging||!isHost) return;
   const v=document.getElementById('videoPlayer');
   if(!v.duration) return;
   const rect=document.getElementById('progressBg').getBoundingClientRect();
-  v.currentTime=Math.max(0,Math.min(1,(e.clientX-rect.left)/rect.width))*v.duration;
+  const pct=Math.max(0,Math.min(1,(e.clientX-rect.left)/rect.width));
+  v.currentTime=pct*v.duration;
+  // Live visual update while dragging
+  document.getElementById('progressFill').style.width=(pct*100)+'%';
+  document.getElementById('progressThumb').style.left=(pct*100)+'%';
+  document.getElementById('timeLabel').textContent=`${ft(v.currentTime)} / ${ft(v.duration)}`;
+  showControls();
 });
 document.addEventListener('mouseup',()=>{ if(_dragging){ _dragging=false; syncHost(); } });
 
@@ -1407,7 +1425,26 @@ function skipTime(sec){
   if(!v.duration) return;
   v.currentTime=Math.max(0,Math.min(v.duration,v.currentTime+sec));
   syncHost();
+  showControls();
 }
+
+// ── KEYBOARD SHORTCUTS ──
+document.addEventListener('keydown', e => {
+  // Don't trigger when typing in inputs
+  const tag=document.activeElement.tagName;
+  if(tag==='INPUT'||tag==='TEXTAREA') return;
+  // Only when video is active
+  const v=document.getElementById('videoPlayer');
+  if(!v||v.style.display==='none') return;
+
+  if(e.code==='Space'){ e.preventDefault(); if(isHost) togglePlay(); showControls(); }
+  if(e.code==='ArrowRight'&&isHost){ e.preventDefault(); skipTime(5); }
+  if(e.code==='ArrowLeft'&&isHost){ e.preventDefault(); skipTime(-5); }
+  if(e.code==='ArrowUp'){ e.preventDefault(); const sl=document.getElementById('volSlider'); const newVol=Math.min(1,parseFloat(sl.value)+0.1); sl.value=newVol; setVolume(newVol); }
+  if(e.code==='ArrowDown'){ e.preventDefault(); const sl=document.getElementById('volSlider'); const newVol=Math.max(0,parseFloat(sl.value)-0.1); sl.value=newVol; setVolume(newVol); }
+  if(e.code==='KeyF'){ e.preventDefault(); toggleFullscreen(); }
+  if(e.code==='KeyM'){ e.preventDefault(); toggleMute(); }
+});
 
 // Volume — available to ALL users (local only)
 function setVolume(val){
