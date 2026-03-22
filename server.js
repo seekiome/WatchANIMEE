@@ -168,36 +168,138 @@ function broadcastFriendRequest(toUsername, fromUsername) {
   });
 }
 
+// ── EMAIL (Nodemailer + Gmail SMTP) ──
+// Установи: npm install nodemailer
+const nodemailer = require('nodemailer');
+
+const GMAIL_USER = process.env.GMAIL_USER || null;       // твой gmail: example@gmail.com
+const GMAIL_PASS = process.env.GMAIL_PASS || null;       // App Password (не обычный пароль!)
+const EMAIL_FROM_NAME = process.env.EMAIL_FROM_NAME || 'Watch Together';
+const APP_URL = process.env.SELF_URL || process.env.RAILWAY_STATIC_URL || 'http://localhost:3000';
+
+let _transporter = null;
+function getTransporter() {
+  if (_transporter) return _transporter;
+  if (!GMAIL_USER || !GMAIL_PASS) return null;
+  _transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: { user: GMAIL_USER, pass: GMAIL_PASS }
+  });
+  return _transporter;
+}
+
+async function sendEmail(to, subject, html) {
+  const transport = getTransporter();
+  if (!transport) {
+    console.log(`[email] GMAIL_USER/GMAIL_PASS не заданы — письмо не отправлено\nTo: ${to}\nSubject: ${subject}`);
+    return false;
+  }
+  try {
+    await transport.sendMail({
+      from: `"${EMAIL_FROM_NAME}" <${GMAIL_USER}>`,
+      to,
+      subject,
+      html
+    });
+    console.log(`[email] sent to ${to}`);
+    return true;
+  } catch (e) {
+    console.error('[email] Gmail error:', e.message);
+    return false;
+  }
+}
+
+function emailVerifyHtml(username, link) {
+  return `<!DOCTYPE html><html><body style="font-family:sans-serif;background:#f5eee8;padding:40px 0">
+  <div style="max-width:480px;margin:0 auto;background:#fff;border-radius:16px;padding:40px;box-shadow:0 4px 24px rgba(0,0,0,0.07)">
+    <h2 style="color:#5a3530;margin:0 0 8px">Watch Together</h2>
+    <p style="color:#888;font-size:14px;margin:0 0 28px">Подтверждение email</p>
+    <p style="color:#3a2e28">Привет, <b>${username}</b>!</p>
+    <p style="color:#3a2e28">Нажми кнопку ниже чтобы подтвердить свой email:</p>
+    <a href="${link}" style="display:inline-block;margin:20px 0;padding:14px 32px;background:#c07060;color:#fff;border-radius:10px;text-decoration:none;font-size:15px">Подтвердить email</a>
+    <p style="color:#aaa;font-size:12px">Ссылка действительна 24 часа.<br>Если ты не регистрировался — просто игнорируй это письмо.</p>
+  </div></body></html>`;
+}
+
+function emailResetHtml(username, link) {
+  return `<!DOCTYPE html><html><body style="font-family:sans-serif;background:#f5eee8;padding:40px 0">
+  <div style="max-width:480px;margin:0 auto;background:#fff;border-radius:16px;padding:40px;box-shadow:0 4px 24px rgba(0,0,0,0.07)">
+    <h2 style="color:#5a3530;margin:0 0 8px">Watch Together</h2>
+    <p style="color:#888;font-size:14px;margin:0 0 28px">Сброс пароля</p>
+    <p style="color:#3a2e28">Привет, <b>${username}</b>!</p>
+    <p style="color:#3a2e28">Ты запросил сброс пароля. Нажми кнопку ниже:</p>
+    <a href="${link}" style="display:inline-block;margin:20px 0;padding:14px 32px;background:#c07060;color:#fff;border-radius:10px;text-decoration:none;font-size:15px">Сбросить пароль</a>
+    <p style="color:#aaa;font-size:12px">Ссылка действительна 1 час.<br>Если ты не запрашивал сброс — просто игнорируй это письмо.</p>
+  </div></body></html>`;
+}
+
+// Хранилище токенов верификации и сброса (in-memory, с TTL)
+const _verifyTokens = new Map(); // token -> { username, expiresAt }
+const _resetTokens  = new Map(); // token -> { username, expiresAt }
+
+// Чистка просроченных токенов каждый час
+setInterval(() => {
+  const now = Date.now();
+  for (const [k, v] of _verifyTokens) if (v.expiresAt < now) _verifyTokens.delete(k);
+  for (const [k, v] of _resetTokens)  if (v.expiresAt < now) _resetTokens.delete(k);
+}, 60 * 60 * 1000);
+
 // ── AUTH ROUTES ──
 app.post('/api/register', async (req, res) => {
   const ip = req.ip || req.connection.remoteAddress || 'unknown';
-  // FIX [CRIT-4]: Rate limit на регистрацию
   if (!checkRateLimit('reg_' + ip)) {
     return res.status(429).json({ error: 'Too many attempts, try later' });
   }
 
-  const { username, password, avatar } = req.body;
+  const { username, password, avatar, email } = req.body;
   if (!username || !password) return res.status(400).json({ error: 'Missing fields' });
   if (username.length < 2 || username.length > 24) return res.status(400).json({ error: 'Username 2-24 chars' });
   if (!/^[a-zA-Z0-9_\u0400-\u04FF]+$/.test(username)) return res.status(400).json({ error: 'Letters, numbers, _ only' });
   if (password.length < 6) return res.status(400).json({ error: 'Password min 6 chars' });
 
+  // Валидация email если указан
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return res.status(400).json({ error: 'Invalid email' });
+  }
+
   const users = loadUsers();
   if (users[username]) return res.status(409).json({ error: 'Username taken' });
+
+  // Проверка уникальности email
+  if (email) {
+    const emailTaken = Object.values(users).some(u => u.email === email.toLowerCase());
+    if (emailTaken) return res.status(409).json({ error: 'Email already registered' });
+  }
 
   const { hash, salt } = hashPassword(password);
   users[username] = {
     password: hash,
     salt,
     avatar: avatar || '🌸',
+    email: email ? email.toLowerCase() : null,
+    emailVerified: false,
     friends: [],
     friendRequests: [],
     createdAt: Date.now()
   };
   await saveUsers(users);
 
+  // Отправляем письмо верификации если email указан
+  if (email) {
+    const vToken = crypto.randomBytes(32).toString('hex');
+    _verifyTokens.set(vToken, { username, expiresAt: Date.now() + 24 * 60 * 60 * 1000 });
+    const link = `${APP_URL}/api/verify-email?token=${vToken}`;
+    sendEmail(email, 'Подтверди свой email — Watch Together', emailVerifyHtml(username, link));
+  }
+
   const token = await createSession(username);
-  res.json({ token, username, avatar: users[username].avatar });
+  res.json({
+    token,
+    username,
+    avatar: users[username].avatar,
+    emailVerified: false,
+    message: email ? 'Письмо с подтверждением отправлено на ' + email : null
+  });
 });
 
 app.post('/api/login', async (req, res) => {
@@ -247,6 +349,105 @@ app.post('/api/logout', async (req, res) => {
   res.json({ ok: true });
 });
 
+// ── EMAIL VERIFICATION ──
+
+// GET /api/verify-email?token=xxx — переход по ссылке из письма
+app.get('/api/verify-email', async (req, res) => {
+  const { token } = req.query;
+  const entry = _verifyTokens.get(token);
+  if (!entry || entry.expiresAt < Date.now()) {
+    return res.status(400).send(`<!DOCTYPE html><html><body style="font-family:sans-serif;text-align:center;padding:60px;background:#f5eee8">
+      <h2 style="color:#c07060">Ссылка недействительна</h2>
+      <p>Ссылка устарела или уже использована.</p>
+      <a href="${APP_URL}" style="color:#c07060">Вернуться на сайт</a>
+    </body></html>`);
+  }
+  const users = loadUsers();
+  if (users[entry.username]) {
+    users[entry.username].emailVerified = true;
+    await saveUsers(users);
+  }
+  _verifyTokens.delete(token);
+  res.send(`<!DOCTYPE html><html><body style="font-family:sans-serif;text-align:center;padding:60px;background:#f5eee8">
+    <h2 style="color:#5a3530">Email подтверждён ✓</h2>
+    <p>Теперь ты можешь войти в Watch Together.</p>
+    <a href="${APP_URL}" style="display:inline-block;margin-top:20px;padding:12px 28px;background:#c07060;color:#fff;border-radius:10px;text-decoration:none">Перейти на сайт</a>
+  </body></html>`);
+});
+
+// POST /api/resend-verification — повторная отправка письма
+app.post('/api/resend-verification', async (req, res) => {
+  const token = req.headers.authorization?.replace('Bearer ', '');
+  const username = getSession(token);
+  if (!username) return res.status(401).json({ error: 'Unauthorized' });
+
+  const users = loadUsers();
+  const user = users[username];
+  if (!user?.email) return res.status(400).json({ error: 'No email set' });
+  if (user.emailVerified) return res.status(400).json({ error: 'Already verified' });
+
+  const vToken = crypto.randomBytes(32).toString('hex');
+  _verifyTokens.set(vToken, { username, expiresAt: Date.now() + 24 * 60 * 60 * 1000 });
+  const link = `${APP_URL}/api/verify-email?token=${vToken}`;
+  await sendEmail(user.email, 'Подтверди свой email — Watch Together', emailVerifyHtml(username, link));
+  res.json({ ok: true });
+});
+
+// ── PASSWORD RESET ──
+
+// POST /api/forgot-password — запрос сброса
+app.post('/api/forgot-password', async (req, res) => {
+  const ip = req.ip || req.connection.remoteAddress || 'unknown';
+  if (!checkRateLimit('reset_' + ip)) {
+    return res.status(429).json({ error: 'Too many attempts, try later' });
+  }
+
+  const { email } = req.body;
+  if (!email) return res.status(400).json({ error: 'Email required' });
+
+  // Всегда отвечаем OK чтобы не раскрывать существование аккаунта
+  const users = loadUsers();
+  const entry = Object.entries(users).find(([, u]) => u.email === email.toLowerCase());
+  if (entry) {
+    const [username] = entry;
+    const rToken = crypto.randomBytes(32).toString('hex');
+    _resetTokens.set(rToken, { username, expiresAt: Date.now() + 60 * 60 * 1000 });
+    const link = `${APP_URL}?reset=${rToken}`;
+    sendEmail(email.toLowerCase(), 'Сброс пароля — Watch Together', emailResetHtml(username, link));
+  }
+  res.json({ ok: true, message: 'Если аккаунт с таким email существует — письмо отправлено' });
+});
+
+// POST /api/reset-password — установка нового пароля
+app.post('/api/reset-password', async (req, res) => {
+  const { token, password } = req.body;
+  if (!token || !password) return res.status(400).json({ error: 'Missing fields' });
+  if (password.length < 6) return res.status(400).json({ error: 'Password min 6 chars' });
+
+  const entry = _resetTokens.get(token);
+  if (!entry || entry.expiresAt < Date.now()) {
+    return res.status(400).json({ error: 'Link expired or invalid' });
+  }
+
+  const users = loadUsers();
+  if (!users[entry.username]) return res.status(404).json({ error: 'User not found' });
+
+  const { hash, salt } = hashPassword(password);
+  users[entry.username].password = hash;
+  users[entry.username].salt = salt;
+  await saveUsers(users);
+  _resetTokens.delete(token);
+
+  // Удаляем все сессии пользователя для безопасности
+  const sessions = loadSessions();
+  for (const [t, s] of Object.entries(sessions)) {
+    if (s.username === entry.username) delete sessions[t];
+  }
+  await saveSessions(sessions);
+
+  res.json({ ok: true });
+});
+
 app.get('/api/me', (req, res) => {
   const token = req.headers.authorization?.replace('Bearer ', '');
   const username = getSession(token);
@@ -262,7 +463,14 @@ app.get('/api/me', (req, res) => {
     online: onlineUsers.has(f) && onlineUsers.get(f).size > 0
   }));
 
-  res.json({ username, avatar: user.avatar, friends: friendsList, friendRequests: user.friendRequests || [] });
+  res.json({
+    username,
+    avatar: user.avatar,
+    email: user.email || null,
+    emailVerified: user.emailVerified || false,
+    friends: friendsList,
+    friendRequests: user.friendRequests || []
+  });
 });
 
 // ── FRIENDS ──
@@ -666,7 +874,6 @@ function getContentType(filename) {
 
 app.get('/video-stream/:roomId', (req, res) => {
   const roomId = req.params.roomId;
-  // Валидация roomId — защита от path traversal
   if (!/^[A-Z0-9]{4,10}$/i.test(roomId)) return res.status(400).send('Invalid room ID');
 
   const room = rooms[roomId];
@@ -675,9 +882,7 @@ app.get('/video-stream/:roomId', (req, res) => {
   const filename = room.videoFile;
   const filePath = path.join(UPLOAD_DIR, filename);
 
-  // FIX [MED-4]: дополнительная проверка path traversal
   if (!filePath.startsWith(path.resolve(UPLOAD_DIR))) return res.status(403).send('Forbidden');
-
   if (!fs.existsSync(filePath)) return res.status(404).send('Not found');
 
   const stat = fs.statSync(filePath);
@@ -685,26 +890,37 @@ app.get('/video-stream/:roomId', (req, res) => {
   const contentType = getContentType(filename);
   const range = req.headers.range;
 
+  // Общие заголовки для кеширования и буферизации
+  const commonHeaders = {
+    'Content-Type': contentType,
+    'Accept-Ranges': 'bytes',
+    'Cache-Control': 'no-store',           // не кешировать — файл временный
+    'X-Content-Type-Options': 'nosniff',
+  };
+
   if (range) {
     const parts = range.replace(/bytes=/, '').split('-');
     const start = parseInt(parts[0], 10);
-    const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+    // Отдаём крупные чанки — 4MB вместо до конца файла
+    // Это даёт браузеру хорошую буферизацию без перегрузки памяти
+    const CHUNK = 4 * 1024 * 1024;
+    const end = parts[1] ? parseInt(parts[1], 10) : Math.min(start + CHUNK - 1, fileSize - 1);
     const chunkSize = end - start + 1;
 
     res.writeHead(206, {
+      ...commonHeaders,
       'Content-Range': `bytes ${start}-${end}/${fileSize}`,
-      'Accept-Ranges': 'bytes',
       'Content-Length': chunkSize,
-      'Content-Type': contentType,
     });
-    fs.createReadStream(filePath, { start, end }).pipe(res);
+
+    // highWaterMark = 512KB — оптимальный размер буфера чтения с диска
+    fs.createReadStream(filePath, { start, end, highWaterMark: 512 * 1024 }).pipe(res);
   } else {
     res.writeHead(200, {
+      ...commonHeaders,
       'Content-Length': fileSize,
-      'Content-Type': contentType,
-      'Accept-Ranges': 'bytes',
     });
-    fs.createReadStream(filePath).pipe(res);
+    fs.createReadStream(filePath, { highWaterMark: 512 * 1024 }).pipe(res);
   }
 });
 
