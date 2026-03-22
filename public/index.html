@@ -180,6 +180,7 @@ body { background: var(--bg-base); color: var(--text); font-family: 'Cormorant G
 #app:fullscreen .upload-zone,
 #app:fullscreen .upload-progress,
 #app:fullscreen .waiting-screen { display:none!important; }
+/* fs-wrapper = горизонтальный ряд: видео | чат */
 #app.fs-mode .fs-wrapper,
 #app:fullscreen .fs-wrapper,
 #app:-webkit-full-screen .fs-wrapper {
@@ -189,8 +190,7 @@ body { background: var(--bg-base); color: var(--text); font-family: 'Cormorant G
 #app.fs-mode .main-layout,
 #app:fullscreen .main-layout,
 #app:-webkit-full-screen .main-layout {
-  flex:1!important;display:flex!important;
-  min-width:0!important;overflow:hidden!important;
+  flex:1!important;display:flex!important;min-width:0!important;overflow:hidden!important;
 }
 #app.fs-mode .video-area,
 #app:fullscreen .video-area,
@@ -211,17 +211,15 @@ body { background: var(--bg-base); color: var(--text); font-family: 'Cormorant G
 #app:-webkit-full-screen .player-controls {
   position:absolute!important;bottom:0!important;left:0!important;right:0!important;z-index:10!important;
 }
-/* fs-chat: скрыта — показывается только по классу .show */
+/* fs-chat — всегда открыт в fullscreen, тема из CSS-переменных */
 #app.fs-mode .fs-chat,
 #app:fullscreen .fs-chat,
-#app:-webkit-full-screen .fs-chat { display:none!important; }
-#app.fs-mode .fs-chat.show,
-#app:fullscreen .fs-chat.show,
-#app:-webkit-full-screen .fs-chat.show {
+#app:-webkit-full-screen .fs-chat {
   display:flex!important;flex-direction:column!important;
-  width:300px!important;flex-shrink:0!important;height:100%!important;
-  background:rgba(10,10,10,0.95)!important;
-  border-left:1px solid rgba(255,255,255,0.1)!important;
+  width:280px!important;flex-shrink:0!important;height:100%!important;
+  background:var(--surface3)!important;
+  border-left:1px solid var(--border)!important;
+  overflow:hidden!important;
 }
 body:has(#app.fs-mode) .toolbar-row,
 body:has(#app:fullscreen) .toolbar-row { display:none!important; }
@@ -554,17 +552,6 @@ video::-webkit-media-controls-start-playback-button { display:none!important; }
       <div class="codec-warning" id="codecWarning">⚠ MKV/HEVC may not play in Chrome — try MP4 or use Opera/Edge</div>
       <div class="sync-indicator" id="syncIndicator">⟳ Syncing…</div>
 
-      <!-- Кнопка чата в fullscreen — всегда видима поверх видео -->
-      <button id="fsChatToggleFixed" onclick="toggleFsChat()" title="Chat"
-        style="display:none;position:absolute;top:.75rem;right:.75rem;z-index:20;
-               width:36px;height:36px;border-radius:50%;border:1px solid rgba(255,255,255,0.2);
-               background:rgba(0,0,0,0.5);cursor:pointer;align-items:center;justify-content:center;
-               backdrop-filter:blur(4px);">
-        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="rgba(255,255,255,0.8)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
-        </svg>
-      </button>
-
       <div class="player-controls" id="controls" style="display:none">
         <div class="player-progress-wrap">
           <div class="player-progress-bg" id="progressBg" onclick="seekByClick(event)" onmousedown="startDrag(event)">
@@ -597,9 +584,6 @@ video::-webkit-media-controls-start-playback-button { display:none!important; }
               <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
               <div class="queue-btn-badge" id="queueBadge"></div>
             </button>
-            <button class="player-btn" id="chatToggleBtn" onclick="toggleFsChat()" style="display:none">
-              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
-            </button>
             <button class="player-btn" onclick="toggleStretch()" id="stretchBtn" title="Stretch to fill">
               <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
             </button>
@@ -627,9 +611,9 @@ video::-webkit-media-controls-start-playback-button { display:none!important; }
   </div>
 
   <div class="fs-chat" id="fsChat">
-    <div class="fs-chat-header" style="display:flex;align-items:center;justify-content:space-between;padding:.6rem .75rem .4rem;border-bottom:1px solid rgba(255,255,255,0.07);flex-shrink:0;">
-      <span style="font-family:monospace;font-size:.65rem;color:rgba(255,255,255,0.4);letter-spacing:.1em;text-transform:uppercase;">Chat</span>
-      <button onclick="toggleFsChat()" style="background:none;border:none;cursor:pointer;color:rgba(255,255,255,0.4);font-size:1rem;line-height:1;padding:2px 4px;" title="Close chat">✕</button>
+    <div class="sidebar-header">
+      <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+      <span id="fsChatLabel">Chat</span>
     </div>
     <div class="messages" id="fsChatMessages"></div>
     <div class="chat-input-wrap">
@@ -804,6 +788,7 @@ function setLang(l){
   document.getElementById('btnJoinText').textContent=t.btnJoin;
   document.getElementById('uploadTitle').textContent=t.uploadTitle;
   document.getElementById('chatLabel').textContent=t.chatLabel;
+  document.getElementById('fsChatLabel').textContent=t.chatLabel;
   document.getElementById('chatInput').placeholder=t.chatPh;
   document.getElementById('modalTitle').textContent=t.modalTitle;
   document.getElementById('modalSub').textContent=t.modalSub;
@@ -1182,7 +1167,6 @@ function showPlayer(){
   document.getElementById('uploadZone').style.display='none';
   document.getElementById('waitingScreen').style.display='none';
   document.getElementById('controls').style.display='block';
-  document.getElementById('chatToggleBtn').style.display='flex';
   document.getElementById('videoArea').classList.add('has-video');
   if(isHost){
     document.getElementById('changeVideoBtn').style.display='flex';
@@ -1366,7 +1350,6 @@ function toggleStretch(){
 }
 
 // ── FULLSCREEN ──
-let isFsChat=false;
 
 function toggleFullscreen(){
   const app=document.getElementById('app');
@@ -1381,20 +1364,15 @@ function toggleFullscreen(){
 }
 
 function enterFsMode(){
-  isFsChat=false;
   document.getElementById('app').classList.add('fs-mode');
   document.getElementById('fsIcon').innerHTML='<path d="M8 3v3a2 2 0 01-2 2H3m18 0h-3a2 2 0 01-2-2V3m0 18v-3a2 2 0 012-2h3M3 16h3a2 2 0 012 2v3"/>';
-  document.getElementById('fsChat').classList.remove('show');
-  document.getElementById('fsChatToggleFixed').style.display='flex';
+  syncFsChat();
   showControls();
 }
 
 function exitFsMode(){
-  isFsChat=false;
   document.getElementById('app').classList.remove('fs-mode','show-ctrl');
   document.getElementById('fsIcon').innerHTML='<path d="M8 3H5a2 2 0 00-2 2v3m18 0V5a2 2 0 00-2-2h-3m0 18h3a2 2 0 002-2v-3M3 16v3a2 2 0 002 2h3"/>';
-  document.getElementById('fsChat').classList.remove('show');
-  document.getElementById('fsChatToggleFixed').style.display='none';
 }
 
 function onFsChange(){
@@ -1405,20 +1383,7 @@ document.addEventListener('fullscreenchange',onFsChange);
 document.addEventListener('webkitfullscreenchange',onFsChange);
 document.addEventListener('mozfullscreenchange',onFsChange);
 
-function toggleFsChat(){
-  isFsChat=!isFsChat;
-  document.getElementById('fsChat').classList.toggle('show',isFsChat);
-  // сдвигаем кнопку когда чат открыт
-  const btn=document.getElementById('fsChatToggleFixed');
-  btn.style.right=isFsChat?'316px':'.75rem';
-  if(isFsChat) syncFsChat();
-}
-
-// FIX [LOW-3]: единый массив сообщений, рендерим оба контейнера из него
-const _messages=[];
-
 function syncFsChat(){
-  if(!isFsChat) return;
   const dst=document.getElementById('fsChatMessages');
   dst.innerHTML=document.getElementById('messages').innerHTML;
   dst.scrollTop=dst.scrollHeight;
@@ -1429,7 +1394,6 @@ function sendFsChat(){
   const txt=inp.value.trim(); if(!txt||!ws) return;
   ws.send(JSON.stringify({type:'chat',name:myName,text:txt}));
   inp.value='';
-  // НЕ вызываем syncFsChat() — сообщение придёт обратно через broadcast и вызовет addMsg()
 }
 
 // ── QUEUE ──
@@ -1634,13 +1598,11 @@ function addMsg(author,text,avatar){
   const av=avatar?`<span style="margin-right:.3rem">${esc(avatar)}</span>`:'';
   d.innerHTML=`<div class="msg-author">${av}${esc(author)}</div><div class="msg-text">${esc(text)}</div>`;
   m.appendChild(d); m.scrollTop=m.scrollHeight;
-  // FIX [LOW-3]: синхронизируем fs-чат только если он открыт, не дублируем
-  if(isFsChat){
-    const dst=document.getElementById('fsChatMessages');
-    const clone=d.cloneNode(true);
-    dst.appendChild(clone);
-    dst.scrollTop=dst.scrollHeight;
-  }
+  // всегда синхронизируем fs-чат
+  const dst=document.getElementById('fsChatMessages');
+  const clone=d.cloneNode(true);
+  dst.appendChild(clone);
+  dst.scrollTop=dst.scrollHeight;
 }
 
 function sysMsg(text){
