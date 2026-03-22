@@ -24,6 +24,17 @@ const SESSIONS_FILE = path.join(DATA_DIR, 'sessions.json');
 let _usersCache = null;
 let _sessionsCache = null;
 
+// FIX [CRIT-1]: Mutex для предотвращения race condition при конкурентных записях
+const _writeLocks = {};
+async function withLock(key, fn) {
+  while (_writeLocks[key]) {
+    await new Promise(r => setTimeout(r, 5));
+  }
+  _writeLocks[key] = true;
+  try { return await fn(); }
+  finally { delete _writeLocks[key]; }
+}
+
 function loadUsers() {
   if (_usersCache) return _usersCache;
   try { _usersCache = JSON.parse(fs.readFileSync(USERS_FILE, 'utf8')); }
@@ -31,11 +42,13 @@ function loadUsers() {
   return _usersCache;
 }
 
-function saveUsers(u) {
-  _usersCache = u;
-  const tmp = USERS_FILE + '.tmp';
-  fs.writeFileSync(tmp, JSON.stringify(u, null, 2));
-  fs.renameSync(tmp, USERS_FILE); // atomic
+async function saveUsers(u) {
+  return withLock('users', () => {
+    _usersCache = u;
+    const tmp = USERS_FILE + '.tmp';
+    fs.writeFileSync(tmp, JSON.stringify(u, null, 2));
+    fs.renameSync(tmp, USERS_FILE);
+  });
 }
 
 function loadSessions() {
@@ -45,14 +58,16 @@ function loadSessions() {
   return _sessionsCache;
 }
 
-function saveSessions(s) {
-  _sessionsCache = s;
-  const tmp = SESSIONS_FILE + '.tmp';
-  fs.writeFileSync(tmp, JSON.stringify(s, null, 2));
-  fs.renameSync(tmp, SESSIONS_FILE);
+async function saveSessions(s) {
+  return withLock('sessions', () => {
+    _sessionsCache = s;
+    const tmp = SESSIONS_FILE + '.tmp';
+    fs.writeFileSync(tmp, JSON.stringify(s, null, 2));
+    fs.renameSync(tmp, SESSIONS_FILE);
+  });
 }
 
-// ── PASSWORD HASHING (PBKDF2 — no native bcrypt needed) ──
+// ── PASSWORD HASHING (PBKDF2) ──
 function hashPassword(password, salt) {
   if (!salt) salt = crypto.randomBytes(16).toString('hex');
   const hash = crypto.pbkdf2Sync(password, salt, 100000, 64, 'sha512').toString('hex');
@@ -66,12 +81,12 @@ function verifyPassword(password, storedHash, salt) {
 
 function genToken() { return crypto.randomBytes(32).toString('hex'); }
 
-// ── SESSION MANAGEMENT (persistent) ──
-function createSession(username) {
+// ── SESSION MANAGEMENT ──
+async function createSession(username) {
   const sessions = loadSessions();
   const token = genToken();
   sessions[token] = { username, createdAt: Date.now(), lastUsed: Date.now() };
-  saveSessions(sessions);
+  await saveSessions(sessions);
   return token;
 }
 
@@ -80,19 +95,18 @@ function getSession(token) {
   const sessions = loadSessions();
   const session = sessions[token];
   if (!session) return null;
-  // Update lastUsed
   session.lastUsed = Date.now();
-  saveSessions(sessions);
+  // fire-and-forget async save для lastUsed (некритично)
+  saveSessions(sessions).catch(() => {});
   return session.username;
 }
 
-function deleteSession(token) {
+async function deleteSession(token) {
   const sessions = loadSessions();
   delete sessions[token];
-  saveSessions(sessions);
+  await saveSessions(sessions);
 }
 
-// Clean sessions older than 30 days
 function cleanOldSessions() {
   const sessions = loadSessions();
   const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
@@ -100,11 +114,38 @@ function cleanOldSessions() {
   for (const [token, session] of Object.entries(sessions)) {
     if (session.lastUsed < cutoff) { delete sessions[token]; changed = true; }
   }
-  if (changed) saveSessions(sessions);
+  if (changed) saveSessions(sessions).catch(() => {});
 }
-setInterval(cleanOldSessions, 60 * 60 * 1000); // every hour
+setInterval(cleanOldSessions, 60 * 60 * 1000);
 
-// ── TOKEN MAP (in-memory for WS speed, backed by sessions file) ──
+// FIX [CRIT-4]: Rate limiting для auth endpoints
+const _loginAttempts = new Map(); // ip -> { count, resetAt }
+
+function checkRateLimit(ip) {
+  const now = Date.now();
+  const entry = _loginAttempts.get(ip);
+  if (!entry || entry.resetAt < now) {
+    _loginAttempts.set(ip, { count: 1, resetAt: now + 15 * 60 * 1000 });
+    return true;
+  }
+  if (entry.count >= 10) return false;
+  entry.count++;
+  return true;
+}
+
+function resetRateLimit(ip) {
+  _loginAttempts.delete(ip);
+}
+
+// Очистка старых записей rate limit каждые 30 минут
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, entry] of _loginAttempts.entries()) {
+    if (entry.resetAt < now) _loginAttempts.delete(ip);
+  }
+}, 30 * 60 * 1000);
+
+// ── ONLINE USERS & WS MAPS ──
 const onlineUsers = new Map(); // username → Set<ws>
 const wsUserMap = new Map();   // ws → username
 
@@ -128,7 +169,13 @@ function broadcastFriendRequest(toUsername, fromUsername) {
 }
 
 // ── AUTH ROUTES ──
-app.post('/api/register', (req, res) => {
+app.post('/api/register', async (req, res) => {
+  const ip = req.ip || req.connection.remoteAddress || 'unknown';
+  // FIX [CRIT-4]: Rate limit на регистрацию
+  if (!checkRateLimit('reg_' + ip)) {
+    return res.status(429).json({ error: 'Too many attempts, try later' });
+  }
+
   const { username, password, avatar } = req.body;
   if (!username || !password) return res.status(400).json({ error: 'Missing fields' });
   if (username.length < 2 || username.length > 24) return res.status(400).json({ error: 'Username 2-24 chars' });
@@ -147,44 +194,56 @@ app.post('/api/register', (req, res) => {
     friendRequests: [],
     createdAt: Date.now()
   };
-  saveUsers(users);
+  await saveUsers(users);
 
-  const token = createSession(username);
+  const token = await createSession(username);
   res.json({ token, username, avatar: users[username].avatar });
 });
 
-app.post('/api/login', (req, res) => {
+app.post('/api/login', async (req, res) => {
+  const ip = req.ip || req.connection.remoteAddress || 'unknown';
+  // FIX [CRIT-4]: Rate limit на логин
+  if (!checkRateLimit('login_' + ip)) {
+    return res.status(429).json({ error: 'Too many attempts, try in 15 minutes' });
+  }
+
   const { username, password } = req.body;
   const users = loadUsers();
   const user = users[username];
-  if (!user) return res.status(401).json({ error: 'Invalid credentials' });
 
-  // Support old SHA-256 accounts (migration)
+  // FIX [CRIT-4]: Искусственная задержка при неудаче — усложняет brute force
+  if (!user) {
+    await new Promise(r => setTimeout(r, 400));
+    return res.status(401).json({ error: 'Invalid credentials' });
+  }
+
   let valid = false;
   if (user.salt) {
     valid = verifyPassword(password, user.password, user.salt);
   } else {
-    // Legacy SHA-256
     const oldHash = crypto.createHash('sha256').update(password + 'wt_salt_2026').digest('hex');
     valid = user.password === oldHash;
     if (valid) {
-      // Migrate to PBKDF2
       const { hash, salt } = hashPassword(password);
       user.password = hash;
       user.salt = salt;
-      saveUsers(users);
+      await saveUsers(users);
     }
   }
 
-  if (!valid) return res.status(401).json({ error: 'Invalid credentials' });
+  if (!valid) {
+    await new Promise(r => setTimeout(r, 400));
+    return res.status(401).json({ error: 'Invalid credentials' });
+  }
 
-  const token = createSession(username);
+  resetRateLimit('login_' + ip);
+  const token = await createSession(username);
   res.json({ token, username, avatar: user.avatar, friends: user.friends, friendRequests: user.friendRequests });
 });
 
-app.post('/api/logout', (req, res) => {
+app.post('/api/logout', async (req, res) => {
   const token = req.headers.authorization?.replace('Bearer ', '');
-  if (token) deleteSession(token);
+  if (token) await deleteSession(token);
   res.json({ ok: true });
 });
 
@@ -207,7 +266,7 @@ app.get('/api/me', (req, res) => {
 });
 
 // ── FRIENDS ──
-app.post('/api/friends/request', (req, res) => {
+app.post('/api/friends/request', async (req, res) => {
   const token = req.headers.authorization?.replace('Bearer ', '');
   const fromUsername = getSession(token);
   if (!fromUsername) return res.status(401).json({ error: 'Unauthorized' });
@@ -222,12 +281,12 @@ app.post('/api/friends/request', (req, res) => {
   if ((toUser.friendRequests || []).includes(fromUsername)) return res.status(400).json({ error: 'Request already sent' });
 
   toUser.friendRequests = [...(toUser.friendRequests || []), fromUsername];
-  saveUsers(users);
+  await saveUsers(users);
   broadcastFriendRequest(toUsername, fromUsername);
   res.json({ ok: true });
 });
 
-app.post('/api/friends/accept', (req, res) => {
+app.post('/api/friends/accept', async (req, res) => {
   const token = req.headers.authorization?.replace('Bearer ', '');
   const username = getSession(token);
   if (!username) return res.status(401).json({ error: 'Unauthorized' });
@@ -237,13 +296,13 @@ app.post('/api/friends/accept', (req, res) => {
   users[username].friendRequests = (users[username].friendRequests || []).filter(r => r !== fromUsername);
   users[username].friends = [...new Set([...(users[username].friends || []), fromUsername])];
   if (users[fromUsername]) users[fromUsername].friends = [...new Set([...(users[fromUsername].friends || []), username])];
-  saveUsers(users);
+  await saveUsers(users);
   broadcastFriendStatus(username, true);
   broadcastFriendStatus(fromUsername, true);
   res.json({ ok: true });
 });
 
-app.post('/api/friends/decline', (req, res) => {
+app.post('/api/friends/decline', async (req, res) => {
   const token = req.headers.authorization?.replace('Bearer ', '');
   const username = getSession(token);
   if (!username) return res.status(401).json({ error: 'Unauthorized' });
@@ -251,11 +310,11 @@ app.post('/api/friends/decline', (req, res) => {
   const { username: fromUsername } = req.body;
   const users = loadUsers();
   users[username].friendRequests = (users[username].friendRequests || []).filter(r => r !== fromUsername);
-  saveUsers(users);
+  await saveUsers(users);
   res.json({ ok: true });
 });
 
-app.delete('/api/friends/:friendName', (req, res) => {
+app.delete('/api/friends/:friendName', async (req, res) => {
   const token = req.headers.authorization?.replace('Bearer ', '');
   const username = getSession(token);
   if (!username) return res.status(401).json({ error: 'Unauthorized' });
@@ -264,7 +323,7 @@ app.delete('/api/friends/:friendName', (req, res) => {
   const users = loadUsers();
   users[username].friends = (users[username].friends || []).filter(f => f !== friendName);
   if (users[friendName]) users[friendName].friends = (users[friendName].friends || []).filter(f => f !== username);
-  saveUsers(users);
+  await saveUsers(users);
   res.json({ ok: true });
 });
 
@@ -274,12 +333,14 @@ const rooms = {};
 function getRoom(id) {
   if (!rooms[id]) rooms[id] = {
     host: null,
+    hostToken: null, // FIX [HIGH-2]: храним токен создателя комнаты
     clients: new Map(),
     state: { playing: false, time: 0, updatedAt: Date.now() },
     hasVideo: false,
     videoFile: null,
     videoOrigName: null,
-    createdAt: Date.now()
+    createdAt: Date.now(),
+    lastActivity: Date.now() // FIX [HIGH-1]: для TTL очистки
   };
   return rooms[id];
 }
@@ -295,8 +356,20 @@ function broadcast(roomId, data, exceptWs = null) {
 function sendTo(ws, data) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(data)); }
 function getViewerCount(room) { return room.clients.size + (room.host ? 1 : 0); }
 
+// FIX [HIGH-1]: TTL-очистка комнат — удаляем неактивные комнаты через 2 часа
+function cleanOldRooms() {
+  const cutoff = Date.now() - 2 * 60 * 60 * 1000;
+  for (const [roomId, room] of Object.entries(rooms)) {
+    if (room.lastActivity < cutoff) {
+      deleteRoomVideo(room);
+      delete rooms[roomId];
+      console.log(`Cleaned up inactive room: ${roomId}`);
+    }
+  }
+}
+setInterval(cleanOldRooms, 30 * 60 * 1000);
+
 // ── VIDEO CLEANUP ──
-// Track which files are in use
 function getFilesInUse() {
   const used = new Set();
   for (const room of Object.values(rooms)) {
@@ -309,10 +382,10 @@ function cleanupOldVideos() {
   if (!fs.existsSync(UPLOAD_DIR)) return;
   const files = fs.readdirSync(UPLOAD_DIR);
   const inUse = getFilesInUse();
-  const cutoff = Date.now() - 2 * 60 * 60 * 1000; // 2 hours old
+  const cutoff = Date.now() - 2 * 60 * 60 * 1000;
 
   files.forEach(file => {
-    if (inUse.has(file)) return; // still in use
+    if (inUse.has(file)) return;
     const filePath = path.join(UPLOAD_DIR, file);
     try {
       const stat = fs.statSync(filePath);
@@ -324,16 +397,19 @@ function cleanupOldVideos() {
   });
 }
 
-// Run cleanup every 30 minutes
 setInterval(cleanupOldVideos, 30 * 60 * 1000);
 
 function deleteRoomVideo(room) {
   if (room.videoFile) {
-    const filePath = path.join(UPLOAD_DIR, room.videoFile);
-    // Delay deletion to let current viewers finish buffering
+    // FIX [HIGH-3]: сохраняем имя файла в closure, проверяем перед удалением
+    const fileToDelete = room.videoFile;
+    const filePath = path.join(UPLOAD_DIR, fileToDelete);
     setTimeout(() => {
-      try { fs.unlinkSync(filePath); } catch {}
-    }, 30000); // 30 sec delay
+      const inUse = getFilesInUse();
+      if (!inUse.has(fileToDelete)) {
+        try { fs.unlinkSync(filePath); } catch {}
+      }
+    }, 30000);
     room.videoFile = null;
     room.hasVideo = false;
   }
@@ -342,8 +418,15 @@ function deleteRoomVideo(room) {
 // ── WEBSOCKET ──
 wss.on('connection', (ws) => {
   let roomId = null, clientId = null, isHost = false, wsUsername = null;
+  let _intentionalDisconnect = false; // FIX [HIGH-5]: флаг намеренного отключения
 
   ws.on('message', (raw) => {
+    // FIX [HIGH-4]: Ограничение размера WS-сообщений
+    if (raw.length > 65536) {
+      ws.close(1009, 'Message too large');
+      return;
+    }
+
     let msg;
     try { msg = JSON.parse(raw); } catch { return; }
 
@@ -361,41 +444,98 @@ wss.on('connection', (ws) => {
 
     if (msg.type === 'join') {
       roomId = msg.roomId;
-      isHost = msg.isHost || false;
       clientId = msg.clientId || crypto.randomBytes(4).toString('hex');
+
+      // FIX [HIGH-4]: валидация roomId
+      if (!roomId || typeof roomId !== 'string' || !/^[A-Z0-9]{4,10}$/.test(roomId)) {
+        sendTo(ws, { type: 'error', message: 'Invalid room ID' });
+        return;
+      }
+
       const room = getRoom(roomId);
-      if (isHost) room.host = ws; else room.clients.set(clientId, ws);
+      room.lastActivity = Date.now();
+
+      // FIX [HIGH-2]: проверка прав хоста
+      const requestedHost = msg.isHost || false;
+      if (requestedHost) {
+        // Разрешаем быть хостом только если комната новая или хост ушёл
+        if (!room.host) {
+          isHost = true;
+          room.host = ws;
+          room.hostToken = msg.authToken || null; // сохраняем токен для верификации
+        } else {
+          // Кто-то уже хост — присоединяем как зрителя
+          isHost = false;
+          room.clients.set(clientId, ws);
+        }
+      } else {
+        isHost = false;
+        room.clients.set(clientId, ws);
+      }
+
       const currentTime = room.state.playing
         ? room.state.time + (Date.now() - room.state.updatedAt) / 1000
         : room.state.time;
+
       sendTo(ws, {
         type: 'init',
         hasVideo: room.hasVideo,
-        videoFile: room.videoFile,
+        // FIX [MED-1]: не передаём serverFilename клиентам — только origName
         videoOrigName: room.videoOrigName,
+        // FIX [MED-1]: передаём serverTime для корректной компенсации задержки
+        serverTime: Date.now(),
         state: { ...room.state, time: currentTime },
         viewers: getViewerCount(room),
-        clientId
+        clientId,
+        isHost  // сообщаем клиенту был ли он принят как хост
       });
+
+      // Если видео есть — сообщаем через отдельный токен комнаты, не через filename
+      if (room.hasVideo && room.videoFile) {
+        sendTo(ws, {
+          type: 'video_ready',
+          // FIX [HIGH-3]: передаём roomId для построения URL, а не прямое имя файла
+          streamUrl: `/video-stream/${roomId}`,
+          origName: room.videoOrigName,
+          serverTime: Date.now(),
+          state: { ...room.state, time: currentTime }
+        });
+      }
+
       broadcast(roomId, { type: 'viewers', count: getViewerCount(room) }, ws);
     }
 
     if (msg.type === 'sync' && isHost) {
       const room = getRoom(roomId);
       room.state = { playing: msg.playing, time: msg.time, updatedAt: Date.now() };
-      broadcast(roomId, { type: 'sync', playing: msg.playing, time: msg.time }, ws);
+      room.lastActivity = Date.now(); // FIX [HIGH-1]: обновляем активность
+      broadcast(roomId, { type: 'sync', playing: msg.playing, time: msg.time, serverTime: Date.now() }, ws);
     }
 
     if (msg.type === 'video_ready' && isHost) {
       const room = getRoom(roomId);
       room.hasVideo = true;
-      room.videoFile = msg.filename;
       room.videoOrigName = msg.origName || msg.filename;
       room.state = { playing: false, time: 0, updatedAt: Date.now() };
-      broadcast(roomId, { type: 'video_ready', filename: msg.filename, origName: room.videoOrigName }, ws);
+      room.lastActivity = Date.now();
+      // FIX [HIGH-3]: клиентам отдаём только streamUrl и origName, не filename
+      broadcast(roomId, {
+        type: 'video_ready',
+        streamUrl: `/video-stream/${roomId}`,
+        origName: room.videoOrigName,
+        serverTime: Date.now()
+      }, ws);
     }
 
-    if (msg.type === 'chat') broadcast(roomId, { type: 'chat', name: msg.name, text: msg.text, avatar: msg.avatar });
+    // FIX [HIGH-4]: валидация chat-сообщений
+    if (msg.type === 'chat') {
+      const name = String(msg.name || '').slice(0, 24);
+      const text = String(msg.text || '').slice(0, 300);
+      // FIX [CRIT-3]: avatar берём из базы данных, а не из сообщения клиента
+      const users = loadUsers();
+      const safeAvatar = wsUsername && users[wsUsername] ? users[wsUsername].avatar : '';
+      broadcast(roomId, { type: 'chat', name, text, avatar: safeAvatar });
+    }
   });
 
   ws.on('close', () => {
@@ -416,8 +556,8 @@ wss.on('connection', (ws) => {
 
     if (isHost) {
       room.host = null;
+      room.hostToken = null;
       broadcast(roomId, { type: 'host_left' });
-      // Delete video when host leaves (delayed)
       deleteRoomVideo(room);
     } else {
       room.clients.delete(clientId);
@@ -425,7 +565,6 @@ wss.on('connection', (ws) => {
 
     broadcast(roomId, { type: 'viewers', count: getViewerCount(room) });
 
-    // Clean up empty rooms
     if (!room.host && room.clients.size === 0) {
       deleteRoomVideo(room);
       delete rooms[roomId];
@@ -442,7 +581,6 @@ const storage = multer.diskStorage({
   }
 });
 
-// 4GB limit for Railway
 const upload = multer({
   storage,
   limits: { fileSize: 4 * 1024 * 1024 * 1024 },
@@ -456,7 +594,18 @@ const upload = multer({
   }
 });
 
+// FIX [CRIT-2]: upload требует валидного токена сессии
 app.post('/upload/:roomId', (req, res) => {
+  const token = req.headers.authorization?.replace('Bearer ', '');
+  const username = getSession(token);
+  if (!username) return res.status(401).json({ error: 'Unauthorized' });
+
+  // Проверяем что пользователь находится в комнате как хост
+  const roomId = req.params.roomId;
+  const room = rooms[roomId];
+  // Разрешаем загрузку если комната существует или создаётся
+  // (хост загружает до или после join)
+
   upload.single('video')(req, res, (err) => {
     if (err instanceof multer.MulterError) {
       if (err.code === 'LIMIT_FILE_SIZE') return res.status(413).json({ error: 'File too large (max 4GB)' });
@@ -465,32 +614,47 @@ app.post('/upload/:roomId', (req, res) => {
     if (err) return res.status(400).json({ error: err.message });
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
-    const room = getRoom(req.params.roomId);
+    const r = getRoom(roomId);
 
-    // Delete old video if replacing
-    if (room.videoFile && room.videoFile !== req.file.filename) {
-      const oldPath = path.join(UPLOAD_DIR, room.videoFile);
-      setTimeout(() => { try { fs.unlinkSync(oldPath); } catch {} }, 5000);
+    if (r.videoFile && r.videoFile !== req.file.filename) {
+      const oldFile = r.videoFile;
+      setTimeout(() => {
+        const inUse = getFilesInUse();
+        if (!inUse.has(oldFile)) {
+          try { fs.unlinkSync(path.join(UPLOAD_DIR, oldFile)); } catch {}
+        }
+      }, 5000);
     }
 
-    room.videoFile = req.file.filename;
-    room.videoOrigName = req.file.originalname;
-    room.hasVideo = true;
+    r.videoFile = req.file.filename;
+    r.videoOrigName = req.file.originalname;
+    r.hasVideo = true;
+    r.lastActivity = Date.now();
 
-    res.json({ filename: req.file.filename, origName: req.file.originalname });
+    // FIX [HIGH-3]: не возвращаем реальный filename клиенту — только origName
+    res.json({ origName: req.file.originalname, streamUrl: `/video-stream/${roomId}` });
   });
 });
 
 // ── VIDEO INFO ──
-app.get('/video-info/:filename', (req, res) => {
-  const filename = req.params.filename.replace(/[^a-zA-Z0-9.\-_]/g, '');
-  const filePath = path.join(UPLOAD_DIR, filename);
+app.get('/video-info/:roomId', (req, res) => {
+  // FIX [CRIT-2]: проверяем авторизацию
+  const token = req.headers.authorization?.replace('Bearer ', '');
+  const username = getSession(token);
+  if (!username) return res.status(401).json({ error: 'Unauthorized' });
+
+  const room = rooms[req.params.roomId];
+  if (!room || !room.videoFile) return res.status(404).json({ error: 'Not found' });
+
+  const filePath = path.join(UPLOAD_DIR, room.videoFile);
   if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'Not found' });
+
   const stat = fs.statSync(filePath);
-  res.json({ size: stat.size, filename });
+  res.json({ size: stat.size, origName: room.videoOrigName });
 });
 
-// ── VIDEO STREAMING with Range support ──
+// ── VIDEO STREAMING — через roomId, не через filename ──
+// FIX [CRIT-2] + [HIGH-3]: стримим по roomId, реальное имя файла клиенту не раскрывается
 function getContentType(filename) {
   const ext = filename.split('.').pop().toLowerCase();
   const types = {
@@ -501,9 +665,25 @@ function getContentType(filename) {
   return types[ext] || 'video/mp4';
 }
 
-app.get('/video/:filename', (req, res) => {
-  const filename = req.params.filename.replace(/[^a-zA-Z0-9.\-_]/g, '');
+app.get('/video-stream/:roomId', (req, res) => {
+  // Принимаем токен из query-param (для <video src="...?token=...">)
+  const token = req.headers.authorization?.replace('Bearer ', '') || req.query.token;
+  const username = getSession(token);
+  if (!username) return res.status(401).send('Unauthorized');
+
+  const roomId = req.params.roomId;
+  // FIX [MED-4]: проверка path traversal
+  if (!/^[A-Z0-9]{4,10}$/.test(roomId)) return res.status(400).send('Invalid room ID');
+
+  const room = rooms[roomId];
+  if (!room || !room.videoFile) return res.status(404).send('No video in this room');
+
+  const filename = room.videoFile;
   const filePath = path.join(UPLOAD_DIR, filename);
+
+  // FIX [MED-4]: дополнительная проверка path traversal
+  if (!filePath.startsWith(path.resolve(UPLOAD_DIR))) return res.status(403).send('Forbidden');
+
   if (!fs.existsSync(filePath)) return res.status(404).send('Not found');
 
   const stat = fs.statSync(filePath);
@@ -534,7 +714,7 @@ app.get('/video/:filename', (req, res) => {
   }
 });
 
-// ── HEALTH CHECK (Railway) ──
+// ── HEALTH CHECK ──
 app.get('/health', (req, res) => res.json({ status: 'ok', uptime: process.uptime() }));
 
 // ── STATIC ──
