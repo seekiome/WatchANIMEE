@@ -159,51 +159,64 @@ body { background: var(--bg-base); color: var(--text); font-family: 'Cormorant G
 #videoPlayer::-webkit-media-controls-panel { display:none!important; }
 
 /* ── FULLSCREEN MODE ── */
-/* Entire app covers screen */
 #app.fs-mode {
   position:fixed!important; inset:0!important;
-  z-index:9999!important; background:#000!important;
+  z-index:9999!important;
   display:flex!important; flex-direction:row!important;
   width:100vw!important; height:100vh!important;
-  overflow:hidden!important;
+  overflow:hidden!important; background:#000!important;
 }
-/* Video fills the whole screen */
-#app.fs-mode #videoPlayer {
-  position:fixed!important; inset:0!important;
-  width:100vw!important; height:100vh!important;
-  object-fit:contain!important; z-index:1;
-  cursor:none;
-}
-#app.fs-mode.show-ctrl #videoPlayer { cursor:default; }
-/* Controls overlay video */
-#app.fs-mode .player-controls { z-index:3!important; }
-/* Chat panel — right side, does NOT overlap video (video shrinks) */
-#app.fs-mode .fs-chat {
+/* Video container fills left side */
+#app.fs-mode .video-area {
+  flex:1!important;
+  position:relative!important;
+  background:#000!important;
   display:flex!important;
-  position:fixed!important; top:0!important; right:-280px!important;
-  width:280px!important; height:100vh!important;
-  z-index:4!important;
-  transition:right .2s ease!important;
-  flex-direction:column!important;
+  align-items:center!important;
+  justify-content:center!important;
+  overflow:hidden!important;
+  min-width:0!important;
 }
-#app.fs-mode .fs-chat.show {
-  right:0!important;
+/* Video: auto size, no letterbox, centered */
+#app.fs-mode #videoPlayer {
+  position:static!important;
+  width:100%!important;
+  height:100%!important;
+  max-width:100%!important;
+  max-height:100%!important;
+  object-fit:contain!important;
+  display:block!important;
 }
-/* When chat is open — shrink video width so it doesn't overlap */
-#app.fs-mode .fs-chat.show ~ * #videoPlayer,
-#app.fs-mode:has(.fs-chat.show) #videoPlayer {
-  width:calc(100vw - 280px)!important;
+/* Controls pinned to bottom of video-area */
+#app.fs-mode .player-controls {
+  position:absolute!important;
+  bottom:0!important; left:0!important; right:0!important;
+  z-index:10!important;
+}
+/* Cursor hide */
+#app.fs-mode .video-area { cursor:none; }
+#app.fs-mode.show-ctrl .video-area { cursor:default; }
+
+/* Chat panel — sits beside video, NOT over it */
+#app.fs-mode .fs-chat {
+  display:flex!important; flex-direction:column!important;
+  width:0!important; flex-shrink:0!important;
+  overflow:hidden!important;
+  transition:width .2s ease!important;
   height:100vh!important;
-  left:0!important; right:280px!important;
+  background:var(--surface3)!important;
+  border-left:1px solid var(--border)!important;
+  position:relative!important;
 }
-/* Hide everything else */
+#app.fs-mode .fs-chat.show { width:280px!important; }
+
+/* Hide everything not needed */
 #app.fs-mode .topbar { display:none!important; }
 #app.fs-mode .sidebar { display:none!important; }
 #app.fs-mode .fs-wrapper { display:contents!important; }
 #app.fs-mode .main-layout { display:contents!important; }
-#app.fs-mode .video-area { display:contents!important; }
-#app.fs-mode .upload-zone,
-#app.fs-mode .upload-progress,
+#app.fs-mode .upload-zone { display:none!important; }
+#app.fs-mode .upload-progress { display:none!important; }
 #app.fs-mode .waiting-screen { display:none!important; }
 body:has(#app.fs-mode) .toolbar-row { display:none!important; }
 .video-area { flex:1;min-width:0;min-height:0;display:flex;flex-direction:column;background:transparent;position:relative;overflow:hidden; }
@@ -1524,9 +1537,6 @@ function toggleFullscreen(){
     document.getElementById('fsChat').classList.remove('show');
     isFsChat = false;
     app.classList.remove('show-ctrl');
-    // Reset video size
-    const v = document.getElementById('videoPlayer');
-    v.style.width = ''; v.style.height = ''; v.style.right = ''; v.style.left = '';
   }
 }
 
@@ -1535,24 +1545,9 @@ function toggleFsChat(){
   isFsChat = !isFsChat;
   document.getElementById('fsChat').classList.toggle('show', isFsChat);
   if(isFsChat) syncFsChat();
-  // Update video position when chat opens/closes
-  updateFsVideoWidth();
 }
 
-function updateFsVideoWidth(){
-  const v = document.getElementById('videoPlayer');
-  const app = document.getElementById('app');
-  if(!app.classList.contains('fs-mode')) return;
-  if(isFsChat){
-    v.style.width = 'calc(100vw - 280px)';
-    v.style.right = '280px';
-    v.style.left = '0';
-  } else {
-    v.style.width = '100vw';
-    v.style.right = '0';
-    v.style.left = '0';
-  }
-}
+function updateFsVideoWidth(){ /* no-op, handled by CSS flex */ }
 function syncFsChat(){
   if(!isFsChat) return;
   const dst=document.getElementById('fsChatMessages');
