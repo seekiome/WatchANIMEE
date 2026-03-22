@@ -4,6 +4,7 @@ const { WebSocketServer } = require('ws');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
+const multer = require('multer');
 
 const app = express();
 const server = http.createServer(app);
@@ -11,55 +12,119 @@ const wss = new WebSocketServer({ server });
 
 app.use(express.json({ limit: '2mb' }));
 
-// ── DATA PATHS ──
+// ── DATA & UPLOAD DIRS ──
 const DATA_DIR = path.join(__dirname, 'data');
+const UPLOAD_DIR = path.join(__dirname, 'uploads');
+[DATA_DIR, UPLOAD_DIR].forEach(d => { if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true }); });
+
+// ── SIMPLE DB (JSON with atomic write + in-memory cache) ──
 const USERS_FILE = path.join(DATA_DIR, 'users.json');
-if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR);
-if (!fs.existsSync(USERS_FILE)) fs.writeFileSync(USERS_FILE, '{}');
+const SESSIONS_FILE = path.join(DATA_DIR, 'sessions.json');
 
-// ── HELPERS ──
+let _usersCache = null;
+let _sessionsCache = null;
+
 function loadUsers() {
-  try { return JSON.parse(fs.readFileSync(USERS_FILE, 'utf8')); }
-  catch { return {}; }
+  if (_usersCache) return _usersCache;
+  try { _usersCache = JSON.parse(fs.readFileSync(USERS_FILE, 'utf8')); }
+  catch { _usersCache = {}; }
+  return _usersCache;
 }
-function saveUsers(u) { fs.writeFileSync(USERS_FILE, JSON.stringify(u, null, 2)); }
-function hash(pw) { return crypto.createHash('sha256').update(pw + 'wt_salt_2026').digest('hex'); }
-function genToken() { return crypto.randomBytes(24).toString('hex'); }
 
-// ── ONLINE TRACKING ──
-// username → Set of ws connections
-const onlineUsers = new Map();
-// token → username
-const tokenMap = new Map();
-// ws → username
-const wsUserMap = new Map();
+function saveUsers(u) {
+  _usersCache = u;
+  const tmp = USERS_FILE + '.tmp';
+  fs.writeFileSync(tmp, JSON.stringify(u, null, 2));
+  fs.renameSync(tmp, USERS_FILE); // atomic
+}
+
+function loadSessions() {
+  if (_sessionsCache) return _sessionsCache;
+  try { _sessionsCache = JSON.parse(fs.readFileSync(SESSIONS_FILE, 'utf8')); }
+  catch { _sessionsCache = {}; }
+  return _sessionsCache;
+}
+
+function saveSessions(s) {
+  _sessionsCache = s;
+  const tmp = SESSIONS_FILE + '.tmp';
+  fs.writeFileSync(tmp, JSON.stringify(s, null, 2));
+  fs.renameSync(tmp, SESSIONS_FILE);
+}
+
+// ── PASSWORD HASHING (PBKDF2 — no native bcrypt needed) ──
+function hashPassword(password, salt) {
+  if (!salt) salt = crypto.randomBytes(16).toString('hex');
+  const hash = crypto.pbkdf2Sync(password, salt, 100000, 64, 'sha512').toString('hex');
+  return { hash, salt };
+}
+
+function verifyPassword(password, storedHash, salt) {
+  const { hash } = hashPassword(password, salt);
+  return crypto.timingSafeEqual(Buffer.from(hash), Buffer.from(storedHash));
+}
+
+function genToken() { return crypto.randomBytes(32).toString('hex'); }
+
+// ── SESSION MANAGEMENT (persistent) ──
+function createSession(username) {
+  const sessions = loadSessions();
+  const token = genToken();
+  sessions[token] = { username, createdAt: Date.now(), lastUsed: Date.now() };
+  saveSessions(sessions);
+  return token;
+}
+
+function getSession(token) {
+  if (!token) return null;
+  const sessions = loadSessions();
+  const session = sessions[token];
+  if (!session) return null;
+  // Update lastUsed
+  session.lastUsed = Date.now();
+  saveSessions(sessions);
+  return session.username;
+}
+
+function deleteSession(token) {
+  const sessions = loadSessions();
+  delete sessions[token];
+  saveSessions(sessions);
+}
+
+// Clean sessions older than 30 days
+function cleanOldSessions() {
+  const sessions = loadSessions();
+  const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+  let changed = false;
+  for (const [token, session] of Object.entries(sessions)) {
+    if (session.lastUsed < cutoff) { delete sessions[token]; changed = true; }
+  }
+  if (changed) saveSessions(sessions);
+}
+setInterval(cleanOldSessions, 60 * 60 * 1000); // every hour
+
+// ── TOKEN MAP (in-memory for WS speed, backed by sessions file) ──
+const onlineUsers = new Map(); // username → Set<ws>
+const wsUserMap = new Map();   // ws → username
 
 function broadcastFriendStatus(username, online) {
   const users = loadUsers();
   const user = users[username];
   if (!user) return;
-  const friends = user.friends || [];
-  friends.forEach(friendName => {
+  (user.friends || []).forEach(friendName => {
     const fws = onlineUsers.get(friendName);
-    if (fws) {
-      fws.forEach(ws => {
-        if (ws.readyState === 1) {
-          ws.send(JSON.stringify({ type: 'friend_status', username, online }));
-        }
-      });
-    }
+    if (fws) fws.forEach(ws => {
+      if (ws.readyState === 1) ws.send(JSON.stringify({ type: 'friend_status', username, online }));
+    });
   });
 }
 
 function broadcastFriendRequest(toUsername, fromUsername) {
   const fws = onlineUsers.get(toUsername);
-  if (fws) {
-    fws.forEach(ws => {
-      if (ws.readyState === 1) {
-        ws.send(JSON.stringify({ type: 'friend_request', from: fromUsername }));
-      }
-    });
-  }
+  if (fws) fws.forEach(ws => {
+    if (ws.readyState === 1) ws.send(JSON.stringify({ type: 'friend_request', from: fromUsername }));
+  });
 }
 
 // ── AUTH ROUTES ──
@@ -68,20 +133,23 @@ app.post('/api/register', (req, res) => {
   if (!username || !password) return res.status(400).json({ error: 'Missing fields' });
   if (username.length < 2 || username.length > 24) return res.status(400).json({ error: 'Username 2-24 chars' });
   if (!/^[a-zA-Z0-9_\u0400-\u04FF]+$/.test(username)) return res.status(400).json({ error: 'Letters, numbers, _ only' });
+  if (password.length < 6) return res.status(400).json({ error: 'Password min 6 chars' });
 
   const users = loadUsers();
   if (users[username]) return res.status(409).json({ error: 'Username taken' });
 
-  const token = genToken();
+  const { hash, salt } = hashPassword(password);
   users[username] = {
-    password: hash(password),
+    password: hash,
+    salt,
     avatar: avatar || '🌸',
     friends: [],
     friendRequests: [],
     createdAt: Date.now()
   };
   saveUsers(users);
-  tokenMap.set(token, username);
+
+  const token = createSession(username);
   res.json({ token, username, avatar: users[username].avatar });
 });
 
@@ -89,21 +157,46 @@ app.post('/api/login', (req, res) => {
   const { username, password } = req.body;
   const users = loadUsers();
   const user = users[username];
-  if (!user || user.password !== hash(password)) return res.status(401).json({ error: 'Invalid credentials' });
-  const token = genToken();
-  tokenMap.set(token, username);
+  if (!user) return res.status(401).json({ error: 'Invalid credentials' });
+
+  // Support old SHA-256 accounts (migration)
+  let valid = false;
+  if (user.salt) {
+    valid = verifyPassword(password, user.password, user.salt);
+  } else {
+    // Legacy SHA-256
+    const oldHash = crypto.createHash('sha256').update(password + 'wt_salt_2026').digest('hex');
+    valid = user.password === oldHash;
+    if (valid) {
+      // Migrate to PBKDF2
+      const { hash, salt } = hashPassword(password);
+      user.password = hash;
+      user.salt = salt;
+      saveUsers(users);
+    }
+  }
+
+  if (!valid) return res.status(401).json({ error: 'Invalid credentials' });
+
+  const token = createSession(username);
   res.json({ token, username, avatar: user.avatar, friends: user.friends, friendRequests: user.friendRequests });
+});
+
+app.post('/api/logout', (req, res) => {
+  const token = req.headers.authorization?.replace('Bearer ', '');
+  if (token) deleteSession(token);
+  res.json({ ok: true });
 });
 
 app.get('/api/me', (req, res) => {
   const token = req.headers.authorization?.replace('Bearer ', '');
-  const username = tokenMap.get(token);
+  const username = getSession(token);
   if (!username) return res.status(401).json({ error: 'Unauthorized' });
+
   const users = loadUsers();
   const user = users[username];
   if (!user) return res.status(404).json({ error: 'User not found' });
 
-  // Build friends list with online status
   const friendsList = (user.friends || []).map(f => ({
     username: f,
     avatar: users[f]?.avatar || '🌸',
@@ -113,14 +206,14 @@ app.get('/api/me', (req, res) => {
   res.json({ username, avatar: user.avatar, friends: friendsList, friendRequests: user.friendRequests || [] });
 });
 
+// ── FRIENDS ──
 app.post('/api/friends/request', (req, res) => {
   const token = req.headers.authorization?.replace('Bearer ', '');
-  const fromUsername = tokenMap.get(token);
+  const fromUsername = getSession(token);
   if (!fromUsername) return res.status(401).json({ error: 'Unauthorized' });
 
   const { username: toUsername } = req.body;
   const users = loadUsers();
-
   if (!users[toUsername]) return res.status(404).json({ error: 'User not found' });
   if (fromUsername === toUsername) return res.status(400).json({ error: 'Cannot add yourself' });
 
@@ -136,20 +229,15 @@ app.post('/api/friends/request', (req, res) => {
 
 app.post('/api/friends/accept', (req, res) => {
   const token = req.headers.authorization?.replace('Bearer ', '');
-  const username = tokenMap.get(token);
+  const username = getSession(token);
   if (!username) return res.status(401).json({ error: 'Unauthorized' });
 
   const { username: fromUsername } = req.body;
   const users = loadUsers();
-
   users[username].friendRequests = (users[username].friendRequests || []).filter(r => r !== fromUsername);
   users[username].friends = [...new Set([...(users[username].friends || []), fromUsername])];
-  if (users[fromUsername]) {
-    users[fromUsername].friends = [...new Set([...(users[fromUsername].friends || []), username])];
-  }
+  if (users[fromUsername]) users[fromUsername].friends = [...new Set([...(users[fromUsername].friends || []), username])];
   saveUsers(users);
-
-  // Notify both about status
   broadcastFriendStatus(username, true);
   broadcastFriendStatus(fromUsername, true);
   res.json({ ok: true });
@@ -157,7 +245,7 @@ app.post('/api/friends/accept', (req, res) => {
 
 app.post('/api/friends/decline', (req, res) => {
   const token = req.headers.authorization?.replace('Bearer ', '');
-  const username = tokenMap.get(token);
+  const username = getSession(token);
   if (!username) return res.status(401).json({ error: 'Unauthorized' });
 
   const { username: fromUsername } = req.body;
@@ -169,7 +257,7 @@ app.post('/api/friends/decline', (req, res) => {
 
 app.delete('/api/friends/:friendName', (req, res) => {
   const token = req.headers.authorization?.replace('Bearer ', '');
-  const username = tokenMap.get(token);
+  const username = getSession(token);
   if (!username) return res.status(401).json({ error: 'Unauthorized' });
 
   const { friendName } = req.params;
@@ -182,10 +270,20 @@ app.delete('/api/friends/:friendName', (req, res) => {
 
 // ── ROOMS ──
 const rooms = {};
+
 function getRoom(id) {
-  if (!rooms[id]) rooms[id] = { host: null, clients: new Map(), state: { playing: false, time: 0, updatedAt: Date.now() }, hasVideo: false, videoFile: null };
+  if (!rooms[id]) rooms[id] = {
+    host: null,
+    clients: new Map(),
+    state: { playing: false, time: 0, updatedAt: Date.now() },
+    hasVideo: false,
+    videoFile: null,
+    videoOrigName: null,
+    createdAt: Date.now()
+  };
   return rooms[id];
 }
+
 function broadcast(roomId, data, exceptWs = null) {
   const room = rooms[roomId];
   if (!room) return;
@@ -193,8 +291,53 @@ function broadcast(roomId, data, exceptWs = null) {
   if (room.host && room.host !== exceptWs && room.host.readyState === 1) room.host.send(msg);
   room.clients.forEach(client => { if (client !== exceptWs && client.readyState === 1) client.send(msg); });
 }
+
 function sendTo(ws, data) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(data)); }
 function getViewerCount(room) { return room.clients.size + (room.host ? 1 : 0); }
+
+// ── VIDEO CLEANUP ──
+// Track which files are in use
+function getFilesInUse() {
+  const used = new Set();
+  for (const room of Object.values(rooms)) {
+    if (room.videoFile) used.add(room.videoFile);
+  }
+  return used;
+}
+
+function cleanupOldVideos() {
+  if (!fs.existsSync(UPLOAD_DIR)) return;
+  const files = fs.readdirSync(UPLOAD_DIR);
+  const inUse = getFilesInUse();
+  const cutoff = Date.now() - 2 * 60 * 60 * 1000; // 2 hours old
+
+  files.forEach(file => {
+    if (inUse.has(file)) return; // still in use
+    const filePath = path.join(UPLOAD_DIR, file);
+    try {
+      const stat = fs.statSync(filePath);
+      if (stat.mtimeMs < cutoff) {
+        fs.unlinkSync(filePath);
+        console.log(`Cleaned up old video: ${file}`);
+      }
+    } catch {}
+  });
+}
+
+// Run cleanup every 30 minutes
+setInterval(cleanupOldVideos, 30 * 60 * 1000);
+
+function deleteRoomVideo(room) {
+  if (room.videoFile) {
+    const filePath = path.join(UPLOAD_DIR, room.videoFile);
+    // Delay deletion to let current viewers finish buffering
+    setTimeout(() => {
+      try { fs.unlinkSync(filePath); } catch {}
+    }, 30000); // 30 sec delay
+    room.videoFile = null;
+    room.hasVideo = false;
+  }
+}
 
 // ── WEBSOCKET ──
 wss.on('connection', (ws) => {
@@ -204,9 +347,8 @@ wss.on('connection', (ws) => {
     let msg;
     try { msg = JSON.parse(raw); } catch { return; }
 
-    // Auth presence
     if (msg.type === 'auth') {
-      const username = tokenMap.get(msg.token);
+      const username = getSession(msg.token);
       if (username) {
         wsUsername = username;
         wsUserMap.set(ws, username);
@@ -220,11 +362,21 @@ wss.on('connection', (ws) => {
     if (msg.type === 'join') {
       roomId = msg.roomId;
       isHost = msg.isHost || false;
-      clientId = msg.clientId || Math.random().toString(36).substr(2, 8);
+      clientId = msg.clientId || crypto.randomBytes(4).toString('hex');
       const room = getRoom(roomId);
       if (isHost) room.host = ws; else room.clients.set(clientId, ws);
-      const currentTime = room.state.playing ? room.state.time + (Date.now() - room.state.updatedAt) / 1000 : room.state.time;
-      sendTo(ws, { type: 'init', hasVideo: room.hasVideo, videoFile: room.videoFile, state: { ...room.state, time: currentTime }, viewers: getViewerCount(room), clientId });
+      const currentTime = room.state.playing
+        ? room.state.time + (Date.now() - room.state.updatedAt) / 1000
+        : room.state.time;
+      sendTo(ws, {
+        type: 'init',
+        hasVideo: room.hasVideo,
+        videoFile: room.videoFile,
+        videoOrigName: room.videoOrigName,
+        state: { ...room.state, time: currentTime },
+        viewers: getViewerCount(room),
+        clientId
+      });
       broadcast(roomId, { type: 'viewers', count: getViewerCount(room) }, ws);
     }
 
@@ -233,95 +385,163 @@ wss.on('connection', (ws) => {
       room.state = { playing: msg.playing, time: msg.time, updatedAt: Date.now() };
       broadcast(roomId, { type: 'sync', playing: msg.playing, time: msg.time }, ws);
     }
+
     if (msg.type === 'video_ready' && isHost) {
       const room = getRoom(roomId);
       room.hasVideo = true;
       room.videoFile = msg.filename;
-      broadcast(roomId, { type: 'video_ready', filename: msg.filename }, ws);
+      room.videoOrigName = msg.origName || msg.filename;
+      room.state = { playing: false, time: 0, updatedAt: Date.now() };
+      broadcast(roomId, { type: 'video_ready', filename: msg.filename, origName: room.videoOrigName }, ws);
     }
-    if (msg.type === 'offer') { const room = getRoom(roomId); const target = room.clients.get(msg.targetId); if (target) sendTo(target, { type: 'offer', offer: msg.offer }); }
-    if (msg.type === 'answer') { const room = getRoom(roomId); if (room.host) sendTo(room.host, { type: 'answer', answer: msg.answer, clientId }); }
-    if (msg.type === 'ice') {
-      const room = getRoom(roomId);
-      if (msg.toHost && room.host) sendTo(room.host, { type: 'ice', candidate: msg.candidate, clientId });
-      else if (!msg.toHost) { const target = room.clients.get(msg.targetId); if (target) sendTo(target, { type: 'ice', candidate: msg.candidate }); }
-    }
+
     if (msg.type === 'chat') broadcast(roomId, { type: 'chat', name: msg.name, text: msg.text, avatar: msg.avatar });
   });
 
   ws.on('close', () => {
-    // Remove from online
     if (wsUsername) {
       const userWs = onlineUsers.get(wsUsername);
-      if (userWs) { userWs.delete(ws); if (userWs.size === 0) { onlineUsers.delete(wsUsername); broadcastFriendStatus(wsUsername, false); } }
+      if (userWs) {
+        userWs.delete(ws);
+        if (userWs.size === 0) {
+          onlineUsers.delete(wsUsername);
+          broadcastFriendStatus(wsUsername, false);
+        }
+      }
       wsUserMap.delete(ws);
     }
+
     if (!roomId || !rooms[roomId]) return;
     const room = rooms[roomId];
-    if (isHost) { room.host = null; room.hasVideo = false; broadcast(roomId, { type: 'host_left' }); }
-    else room.clients.delete(clientId);
+
+    if (isHost) {
+      room.host = null;
+      broadcast(roomId, { type: 'host_left' });
+      // Delete video when host leaves (delayed)
+      deleteRoomVideo(room);
+    } else {
+      room.clients.delete(clientId);
+    }
+
     broadcast(roomId, { type: 'viewers', count: getViewerCount(room) });
-    if (!room.host && room.clients.size === 0) delete rooms[roomId];
+
+    // Clean up empty rooms
+    if (!room.host && room.clients.size === 0) {
+      deleteRoomVideo(room);
+      delete rooms[roomId];
+    }
   });
 });
 
-const multer = require('multer');
-
 // ── VIDEO UPLOAD ──
-const uploadDir = path.join(__dirname, 'uploads');
-if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
-
 const storage = multer.diskStorage({
-  destination: uploadDir,
+  destination: UPLOAD_DIR,
   filename: (req, file, cb) => {
     const safe = file.originalname.replace(/[^a-zA-Z0-9.\-_]/g, '_');
     cb(null, Date.now() + '_' + safe);
   }
 });
-const upload = multer({ storage, limits: { fileSize: 500 * 1024 * 1024 } });
 
-app.post('/upload/:roomId', upload.single('video'), (req, res) => {
-  if (!req.file) return res.status(400).json({ error: 'No file' });
-  const room = getRoom(req.params.roomId);
-  room.videoFile = req.file.filename;
-  res.json({ filename: req.file.filename });
+// 4GB limit for Railway
+const upload = multer({
+  storage,
+  limits: { fileSize: 4 * 1024 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const allowed = ['video/mp4', 'video/webm', 'video/quicktime', 'video/x-msvideo', 'video/x-matroska', 'video/mpeg', 'video/ogg'];
+    if (allowed.includes(file.mimetype) || file.mimetype.startsWith('video/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only video files allowed'));
+    }
+  }
 });
 
+app.post('/upload/:roomId', (req, res) => {
+  upload.single('video')(req, res, (err) => {
+    if (err instanceof multer.MulterError) {
+      if (err.code === 'LIMIT_FILE_SIZE') return res.status(413).json({ error: 'File too large (max 4GB)' });
+      return res.status(400).json({ error: err.message });
+    }
+    if (err) return res.status(400).json({ error: err.message });
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+
+    const room = getRoom(req.params.roomId);
+
+    // Delete old video if replacing
+    if (room.videoFile && room.videoFile !== req.file.filename) {
+      const oldPath = path.join(UPLOAD_DIR, room.videoFile);
+      setTimeout(() => { try { fs.unlinkSync(oldPath); } catch {} }, 5000);
+    }
+
+    room.videoFile = req.file.filename;
+    room.videoOrigName = req.file.originalname;
+    room.hasVideo = true;
+
+    res.json({ filename: req.file.filename, origName: req.file.originalname });
+  });
+});
+
+// ── VIDEO INFO ──
+app.get('/video-info/:filename', (req, res) => {
+  const filename = req.params.filename.replace(/[^a-zA-Z0-9.\-_]/g, '');
+  const filePath = path.join(UPLOAD_DIR, filename);
+  if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'Not found' });
+  const stat = fs.statSync(filePath);
+  res.json({ size: stat.size, filename });
+});
+
+// ── VIDEO STREAMING with Range support ──
 function getContentType(filename) {
   const ext = filename.split('.').pop().toLowerCase();
-  return { mp4:'video/mp4', mkv:'video/x-matroska', avi:'video/x-msvideo', mov:'video/quicktime', webm:'video/webm', m4v:'video/mp4' }[ext] || 'video/mp4';
+  const types = {
+    mp4: 'video/mp4', mkv: 'video/x-matroska', avi: 'video/x-msvideo',
+    mov: 'video/quicktime', webm: 'video/webm', m4v: 'video/mp4',
+    mpeg: 'video/mpeg', mpg: 'video/mpeg', ogv: 'video/ogg'
+  };
+  return types[ext] || 'video/mp4';
 }
 
 app.get('/video/:filename', (req, res) => {
   const filename = req.params.filename.replace(/[^a-zA-Z0-9.\-_]/g, '');
-  const filePath = path.join(uploadDir, filename);
+  const filePath = path.join(UPLOAD_DIR, filename);
   if (!fs.existsSync(filePath)) return res.status(404).send('Not found');
+
   const stat = fs.statSync(filePath);
   const fileSize = stat.size;
   const contentType = getContentType(filename);
   const range = req.headers.range;
+
   if (range) {
     const parts = range.replace(/bytes=/, '').split('-');
     const start = parseInt(parts[0], 10);
     const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+    const chunkSize = end - start + 1;
+
     res.writeHead(206, {
       'Content-Range': `bytes ${start}-${end}/${fileSize}`,
       'Accept-Ranges': 'bytes',
-      'Content-Length': end - start + 1,
+      'Content-Length': chunkSize,
       'Content-Type': contentType,
     });
     fs.createReadStream(filePath, { start, end }).pipe(res);
   } else {
-    res.writeHead(200, { 'Content-Length': fileSize, 'Content-Type': contentType });
+    res.writeHead(200, {
+      'Content-Length': fileSize,
+      'Content-Type': contentType,
+      'Accept-Ranges': 'bytes',
+    });
     fs.createReadStream(filePath).pipe(res);
   }
 });
 
-// Explicit favicon routes
-app.get('/favicon.ico', (req,res) => res.sendFile(path.join(__dirname,'public','favicon.ico')));
-app.get('/favicon-32.png', (req,res) => res.sendFile(path.join(__dirname,'public','favicon-32.png')));
-app.get('/favicon-16.png', (req,res) => res.sendFile(path.join(__dirname,'public','favicon-16.png')));
+// ── HEALTH CHECK (Railway) ──
+app.get('/health', (req, res) => res.json({ status: 'ok', uptime: process.uptime() }));
 
+// ── STATIC ──
+app.get('/favicon.ico', (req, res) => res.sendFile(path.join(__dirname, 'public', 'favicon.ico')));
+app.get('/favicon-32.png', (req, res) => res.sendFile(path.join(__dirname, 'public', 'favicon-32.png')));
+app.get('/favicon-16.png', (req, res) => res.sendFile(path.join(__dirname, 'public', 'favicon-16.png')));
 app.use(express.static(path.join(__dirname, 'public')));
+
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log(`WatchTogether running on port ${PORT}`));
+server.listen(PORT, '0.0.0.0', () => console.log(`WatchTogether running on port ${PORT}`));
