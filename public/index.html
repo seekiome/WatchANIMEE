@@ -111,8 +111,18 @@ body { background: var(--bg-base); color: var(--text); font-family: 'Cormorant G
 .viewers-count svg { width:13px;height:13px;stroke:var(--text-muted);fill:none;stroke-width:1.8; }
 
 .main-layout { display:flex;flex-direction:row;flex:1;min-height:0;overflow:hidden;width:100%; }
-.video-area { flex:1;min-width:0;min-height:0;display:flex;flex-direction:column;background:transparent;position:relative;overflow:hidden; }
-/* Black bg only when video is active */
+.video-area { flex:1;min-width:0;min-height:0;display:flex;flex-direction:column;background:var(--bg-base);position:relative;overflow:hidden; }
+/* Show sakura bg via pseudo-element in light theme */
+[data-theme="light"] .video-area:not(.has-video)::before {
+  content:'';
+  position:absolute; inset:0;
+  background: radial-gradient(ellipse at 20% 50%, rgba(255,230,220,0.7) 0%, transparent 60%),
+              radial-gradient(ellipse at 80% 20%, rgba(255,210,220,0.5) 0%, transparent 50%),
+              radial-gradient(ellipse at 60% 80%, rgba(240,220,210,0.6) 0%, transparent 55%),
+              linear-gradient(135deg, #f5ede6 0%, #f0e0d5 50%, #ecddd5 100%);
+  pointer-events:none; z-index:0;
+}
+/* Black bg only when video is playing */
 .video-area.has-video { background:#000; }
 
 .upload-zone { flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1rem;cursor:pointer;position:relative;transition:background 0.3s; }
@@ -158,69 +168,82 @@ body { background: var(--bg-base); color: var(--text); font-family: 'Cormorant G
 #videoPlayer::-webkit-media-controls-enclosure,
 #videoPlayer::-webkit-media-controls-panel { display:none!important; }
 
-/* ── FULLSCREEN MODE ── */
-#app.fs-mode {
+/* ── FULLSCREEN MODE — both via JS class and native :fullscreen API ── */
+#app.fs-mode,
+#app:fullscreen,
+#app:-webkit-full-screen,
+#app:-moz-full-screen {
   position:fixed!important; inset:0!important;
   z-index:9999!important;
   display:flex!important; flex-direction:row!important;
   width:100vw!important; height:100vh!important;
   overflow:hidden!important; background:#000!important;
 }
-/* Video container fills left side */
-#app.fs-mode .video-area {
-  flex:1!important;
-  position:relative!important;
-  background:#000!important;
-  display:flex!important;
-  align-items:center!important;
-  justify-content:center!important;
-  overflow:hidden!important;
-  min-width:0!important;
+#app.fs-mode .video-area,
+#app:fullscreen .video-area,
+#app:-webkit-full-screen .video-area {
+  flex:1!important; position:relative!important;
+  background:#000!important; display:flex!important;
+  align-items:center!important; justify-content:center!important;
+  overflow:hidden!important; min-width:0!important;
 }
-/* Video: auto size, no letterbox, centered */
-#app.fs-mode #videoPlayer {
+#app.fs-mode #videoPlayer,
+#app:fullscreen #videoPlayer,
+#app:-webkit-full-screen #videoPlayer {
   position:static!important;
-  width:100%!important;
-  height:100%!important;
-  max-width:100%!important;
-  max-height:100%!important;
-  object-fit:contain!important;
-  display:block!important;
+  width:100%!important; height:100%!important;
+  object-fit:contain!important; display:block!important;
 }
-/* Controls pinned to bottom of video-area */
-#app.fs-mode .player-controls {
+#app.fs-mode .player-controls,
+#app:fullscreen .player-controls,
+#app:-webkit-full-screen .player-controls {
   position:absolute!important;
   bottom:0!important; left:0!important; right:0!important;
   z-index:10!important;
 }
-/* Cursor hide */
-#app.fs-mode .video-area { cursor:none; }
-#app.fs-mode.show-ctrl .video-area { cursor:default; }
+#app.fs-mode .video-area,
+#app:fullscreen .video-area,
+#app:-webkit-full-screen .video-area { cursor:none; }
 
-/* Chat panel — sits beside video, NOT over it */
-#app.fs-mode .fs-chat {
+#app.fs-mode.show-ctrl .video-area,
+#app:fullscreen.show-ctrl .video-area,
+#app:-webkit-full-screen.show-ctrl .video-area { cursor:default; }
+
+#app.fs-mode .fs-chat,
+#app:fullscreen .fs-chat,
+#app:-webkit-full-screen .fs-chat {
   display:flex!important; flex-direction:column!important;
-  width:0!important; flex-shrink:0!important;
-  overflow:hidden!important;
-  transition:width .2s ease!important;
-  height:100vh!important;
-  background:var(--surface3)!important;
-  border-left:1px solid var(--border)!important;
-  position:relative!important;
+  width:0!important; flex-shrink:0!important; overflow:hidden!important;
+  transition:width .2s ease!important; height:100vh!important;
+  background:var(--surface3)!important; border-left:1px solid var(--border)!important;
 }
-#app.fs-mode .fs-chat.show { width:280px!important; }
+#app.fs-mode .fs-chat.show,
+#app:fullscreen .fs-chat.show,
+#app:-webkit-full-screen .fs-chat.show { width:280px!important; }
 
-/* Hide everything not needed */
-#app.fs-mode .topbar { display:none!important; }
-#app.fs-mode .sidebar { display:none!important; }
-#app.fs-mode .fs-wrapper { display:contents!important; }
-#app.fs-mode .main-layout { display:contents!important; }
-#app.fs-mode .upload-zone { display:none!important; }
-#app.fs-mode .upload-progress { display:none!important; }
+#app.fs-mode .topbar,
+#app:fullscreen .topbar,
+#app:-webkit-full-screen .topbar { display:none!important; }
+
+#app.fs-mode .sidebar,
+#app:fullscreen .sidebar,
+#app:-webkit-full-screen .sidebar { display:none!important; }
+
+#app.fs-mode .fs-wrapper,
+#app:fullscreen .fs-wrapper,
+#app:-webkit-full-screen .fs-wrapper { display:contents!important; }
+
+#app.fs-mode .main-layout,
+#app:fullscreen .main-layout,
+#app:-webkit-full-screen .main-layout { display:contents!important; }
+
+#app.fs-mode .upload-zone,
+#app.fs-mode .upload-progress,
 #app.fs-mode .waiting-screen { display:none!important; }
-body:has(#app.fs-mode) .toolbar-row { display:none!important; }
-.video-area { flex:1;min-width:0;min-height:0;display:flex;flex-direction:column;background:transparent;position:relative;overflow:hidden; }
-.video-area.has-video { background:#000; }
+
+body:has(#app.fs-mode) .toolbar-row,
+body:has(#app:fullscreen) .toolbar-row,
+body:has(#app:-webkit-full-screen) .toolbar-row { display:none!important; }
 .player-progress-wrap { display:flex;align-items:center;gap:.75rem;margin-bottom:.5rem; }
 .player-progress-bg { flex:1;height:4px;background:rgba(255,255,255,0.15);border-radius:4px;cursor:pointer;position:relative;transition:height .15s; }
 .player-progress-bg:hover { height:6px; }
@@ -242,6 +265,11 @@ body:has(#app.fs-mode) .toolbar-row { display:none!important; }
 /* FS WRAPPER (normal mode only) */
 .fs-wrapper { display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden; }
 .fs-wrapper .main-layout { flex:1;min-height:0; }
+
+/* Suppress Opera/Chrome native video overlay UI */
+#videoPlayer::-webkit-media-controls-overlay-play-button { display:none!important; opacity:0!important; }
+video::-webkit-media-controls { display:none!important; }
+video::-webkit-media-controls-start-playback-button { display:none!important; }
 
 /* FS Chat — hidden in normal mode */
 .fs-chat { display:none; flex-direction:column; background:var(--surface3); border-left:1px solid var(--border); overflow:hidden; }
@@ -622,6 +650,8 @@ body:has(#app.fs-mode) .toolbar-row { display:none!important; }
   <div class="fs-wrapper" id="fsWrapper">
     <div class="main-layout">
     <div class="video-area" id="videoArea">
+      <!-- Inner sakura canvas (light theme only) -->
+      <canvas id="bgCanvasInner" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:0;opacity:1;transition:opacity .4s"></canvas>
       <!-- Upload zone (host only) -->
       <div class="upload-zone" id="uploadZone" onclick="document.getElementById('fileInput').click()" style="display:none">
         <div class="upload-circle">
@@ -645,7 +675,7 @@ body:has(#app.fs-mode) .toolbar-row { display:none!important; }
         <div class="waiting-text" id="waitingText">Waiting for host…</div>
       </div>
 
-      <video id="videoPlayer" disablepictureinpicture disableremoteplayback controlslist="nodownload nofullscreen noremoteplayback noplaybackrate" x-webkit-airplay="deny" webkit-playsinline playsinline></video>
+      <video id="videoPlayer" disablepictureinpicture disableremoteplayback controlslist="nodownload noremoteplayback noplaybackrate" x-webkit-airplay="deny" webkit-playsinline playsinline></video>
 
       <!-- Chrome codec warning -->
       <div class="codec-warning" id="codecWarning">⚠ MKV/HEVC may not play in Chrome — try MP4 or use Opera/Edge</div>
@@ -690,6 +720,9 @@ body:has(#app.fs-mode) .toolbar-row { display:none!important; }
             </button>
             <button class="player-btn" id="chatToggleBtn" onclick="toggleFsChat()" style="display:none">
               <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+            </button>
+            <button class="player-btn" onclick="toggleStretch()" id="stretchBtn" title="Stretch to fill">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
             </button>
             <button class="player-btn" onclick="toggleFullscreen()" id="fsBtn">
               <svg id="fsIcon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 3H5a2 2 0 00-2 2v3m18 0V5a2 2 0 00-2-2h-3m0 18h3a2 2 0 002-2v-3M3 16v3a2 2 0 002 2h3"/></svg>
@@ -1515,39 +1548,72 @@ function updateVolIcon(vol){
   else icon.innerHTML='<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 010 14.14"/><path d="M15.54 8.46a5 5 0 010 7.07"/>';
 }
 
+// ── STRETCH MODE (cover vs contain) ──
+let _isStretched = false;
+function toggleStretch(){
+  _isStretched = !_isStretched;
+  const v = document.getElementById('videoPlayer');
+  v.style.objectFit = _isStretched ? 'cover' : 'contain';
+  const btn = document.getElementById('stretchBtn');
+  btn.style.color = _isStretched ? 'var(--accent)' : '';
+  btn.title = _isStretched ? 'Restore aspect ratio' : 'Stretch to fill';
+}
+
 // ── FULLSCREEN ──
 let isFsChat = false;
 let _isFsMode = false;
 let _fsCtrlTimer = null;
 
 function toggleFullscreen(){
-  _isFsMode = !_isFsMode;
   const app = document.getElementById('app');
-  app.classList.toggle('fs-mode', _isFsMode);
+  const isFs = !!document.fullscreenElement || !!document.webkitFullscreenElement;
 
-  if(_isFsMode){
-    document.getElementById('fsIcon').innerHTML='<path d="M8 3v3a2 2 0 01-2 2H3m18 0h-3a2 2 0 01-2-2V3m0 18v-3a2 2 0 012-2h3M3 16h3a2 2 0 012 2v3"/>';
-    isFsChat = true;
-    document.getElementById('fsChat').classList.add('show');
-    syncFsChat();
-    showControls();
-    updateFsVideoWidth();
+  if(!isFs){
+    // Request fullscreen on #app so our entire UI goes fullscreen
+    const req = app.requestFullscreen || app.webkitRequestFullscreen || app.mozRequestFullScreen;
+    if(req) req.call(app);
+    else enterFsMode(); // fallback if API not supported
   } else {
-    document.getElementById('fsIcon').innerHTML='<path d="M8 3H5a2 2 0 00-2 2v3m18 0V5a2 2 0 00-2-2h-3m0 18h3a2 2 0 002-2v-3M3 16v3a2 2 0 002 2h3"/>';
-    document.getElementById('fsChat').classList.remove('show');
-    isFsChat = false;
-    app.classList.remove('show-ctrl');
+    const exit = document.exitFullscreen || document.webkitExitFullscreen || document.mozCancelFullScreen;
+    if(exit) exit.call(document);
+    else exitFsMode();
   }
 }
 
-// Remove Fullscreen API listeners — not needed
+function enterFsMode(){
+  _isFsMode = true;
+  document.getElementById('app').classList.add('fs-mode');
+  document.getElementById('fsIcon').innerHTML='<path d="M8 3v3a2 2 0 01-2 2H3m18 0h-3a2 2 0 01-2-2V3m0 18v-3a2 2 0 012-2h3M3 16h3a2 2 0 012 2v3"/>';
+  isFsChat = true;
+  document.getElementById('fsChat').classList.add('show');
+  syncFsChat(); showControls();
+}
+
+function exitFsMode(){
+  _isFsMode = false;
+  document.getElementById('app').classList.remove('fs-mode','show-ctrl');
+  document.getElementById('fsIcon').innerHTML='<path d="M8 3H5a2 2 0 00-2 2v3m18 0V5a2 2 0 00-2-2h-3m0 18h3a2 2 0 002-2v-3M3 16v3a2 2 0 002 2h3"/>';
+  document.getElementById('fsChat').classList.remove('show');
+  isFsChat = false;
+}
+
+// Handle all fullscreen change events (Esc, F11, button)
+function onFsChange(){
+  const isFs = !!document.fullscreenElement || !!document.webkitFullscreenElement;
+  if(isFs) enterFsMode();
+  else exitFsMode();
+}
+document.addEventListener('fullscreenchange', onFsChange);
+document.addEventListener('webkitfullscreenchange', onFsChange);
+document.addEventListener('mozfullscreenchange', onFsChange);
+
 function toggleFsChat(){
   isFsChat = !isFsChat;
   document.getElementById('fsChat').classList.toggle('show', isFsChat);
   if(isFsChat) syncFsChat();
 }
 
-function updateFsVideoWidth(){ /* no-op, handled by CSS flex */ }
+function updateFsVideoWidth(){ /* handled by CSS flex */ }
 function syncFsChat(){
   if(!isFsChat) return;
   const dst=document.getElementById('fsChatMessages');
@@ -1930,8 +1996,11 @@ function spawnPetals(){
 
 // ── ANIMATED BACKGROUND ──
 (function(){
-  const canvas=document.getElementById('bgCanvas');
-  const ctx=canvas.getContext('2d');
+  // Renders to both the lobby canvas AND the inner video-area canvas
+  const canvases = [
+    document.getElementById('bgCanvas'),
+    document.getElementById('bgCanvasInner')
+  ];
   let W,H,t=0;
   const branches=[];
   function makeBranch(x,y,angle,len,depth){
@@ -1960,8 +2029,7 @@ function spawnPetals(){
     makeBranch(W*1.0,H*0.55,-Math.PI+0.3,W*0.22,6);
     seedBlossoms();
   }
-  function resize(){ W=canvas.width=window.innerWidth; H=canvas.height=window.innerHeight; buildTree(); }
-  function drawLight(){
+  function drawLight(ctx){
     ctx.fillStyle='#f5ede6'; ctx.fillRect(0,0,W,H);
     const mists=[{x:.5,y:.35,rx:.9,ry:.45,c:'rgba(255,245,248,0.55)',speed:.6},{x:.15,y:.6,rx:.55,ry:.35,c:'rgba(240,235,248,0.45)',speed:.4},{x:.82,y:.2,rx:.5,ry:.3,c:'rgba(255,240,245,0.5)',speed:.5}];
     mists.forEach((m,i)=>{
@@ -1988,7 +2056,7 @@ function spawnPetals(){
       ctx.fillStyle=g; ctx.beginPath(); ctx.arc(bl.x+sway,bl.y,r*1.6,0,Math.PI*2); ctx.fill();
     });
   }
-  function drawDark(){
+  function drawDark(ctx){
     ctx.fillStyle='#000'; ctx.fillRect(0,0,W,H);
     const glow=ctx.createRadialGradient(W*.5,H,0,W*.5,H,H*.6);
     glow.addColorStop(0,'rgba(232,48,106,0.07)'); glow.addColorStop(1,'transparent');
@@ -2001,9 +2069,26 @@ function spawnPetals(){
       ctx.beginPath(); ctx.arc(sx,sy,0.4+Math.abs(Math.sin(t*1.2+i))*1.0,0,Math.PI*2); ctx.fill();
     }
   }
+  function resize(){
+    W=window.innerWidth; H=window.innerHeight;
+    canvases.forEach(c=>{ if(c){ c.width=W; c.height=H; } });
+    buildTree();
+  }
   function draw(){
-    t+=0.006; ctx.clearRect(0,0,W,H);
-    if(document.documentElement.getAttribute('data-theme')==='dark') drawDark(); else drawLight();
+    t+=0.006;
+    const isDark=document.documentElement.getAttribute('data-theme')==='dark';
+    canvases.forEach(c=>{
+      if(!c) return;
+      const ctx=c.getContext('2d');
+      // Inner canvas: only show in light theme when no video
+      if(c.id==='bgCanvasInner'){
+        const hasVideo=document.getElementById('videoArea')?.classList.contains('has-video');
+        c.style.opacity=(isDark||hasVideo)?'0':'1';
+        if(isDark||hasVideo) return;
+      }
+      ctx.clearRect(0,0,W,H);
+      if(isDark) drawDark(ctx); else drawLight(ctx);
+    });
     requestAnimationFrame(draw);
   }
   window.addEventListener('resize',resize);
