@@ -190,16 +190,58 @@ body { background: var(--bg-base); color: var(--text); font-family: 'Cormorant G
 .fs-wrapper { display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden; }
 .fs-wrapper .main-layout { flex:1;min-height:0; }
 
-/* FULLSCREEN — applied to fs-wrapper */
-.fs-wrapper.fullscreen { position:fixed!important;inset:0!important;z-index:1000!important;background:#000!important;flex-direction:row!important;display:flex!important; }
+/* FULLSCREEN — triggered by native Fullscreen API */
+/* :fullscreen applies when fsWrapper is the fullscreen element */
+#fsWrapper:fullscreen,
+#fsWrapper:-webkit-full-screen,
+#fsWrapper:-moz-full-screen,
+.fs-wrapper.fullscreen {
+  position:fixed!important; inset:0!important; z-index:1000!important;
+  background:#000!important; flex-direction:row!important; display:flex!important;
+  width:100vw!important; height:100vh!important;
+}
+#fsWrapper:fullscreen .main-layout,
+#fsWrapper:-webkit-full-screen .main-layout,
 .fs-wrapper.fullscreen .main-layout { flex:1;min-width:0;position:relative; }
+
+#fsWrapper:fullscreen .sidebar,
+#fsWrapper:-webkit-full-screen .sidebar,
 .fs-wrapper.fullscreen .sidebar { display:none!important; }
-.fs-wrapper.fullscreen .video-area { background:#000!important;position:static!important; }
-/* Controls use .visible class — same autohide system */
+
+#fsWrapper:fullscreen .video-area,
+#fsWrapper:-webkit-full-screen .video-area,
+.fs-wrapper.fullscreen .video-area { background:#000!important; }
+
+#fsWrapper:fullscreen #videoPlayer,
+#fsWrapper:-webkit-full-screen #videoPlayer,
+.fs-wrapper.fullscreen #videoPlayer {
+  width:100%!important; height:100%!important;
+  position:absolute!important; inset:0!important;
+  object-fit:contain!important;
+}
+/* Autohide cursor */
+#fsWrapper:fullscreen #videoPlayer,
+#fsWrapper:-webkit-full-screen #videoPlayer,
 .fs-wrapper.fullscreen #videoPlayer { cursor:none; }
+#fsWrapper:fullscreen.show-controls #videoPlayer,
+#fsWrapper:-webkit-full-screen.show-controls #videoPlayer,
 .fs-wrapper.fullscreen.show-controls #videoPlayer { cursor:default; }
+
+/* Hide topbar/toolbar when fullscreen */
+body:has(#fsWrapper:fullscreen) .topbar,
+body:has(#fsWrapper:-webkit-full-screen) .topbar,
 body:has(.fs-wrapper.fullscreen) .topbar { display:none!important; }
+body:has(#fsWrapper:fullscreen) .toolbar-row,
+body:has(#fsWrapper:-webkit-full-screen) .toolbar-row,
 body:has(.fs-wrapper.fullscreen) .toolbar-row { display:none!important; }
+
+/* FS Chat in fullscreen */
+#fsWrapper:fullscreen .fs-chat,
+#fsWrapper:-webkit-full-screen .fs-chat,
+.fs-wrapper.fullscreen .fs-chat { display:flex; }
+#fsWrapper:fullscreen .fs-chat.show,
+#fsWrapper:-webkit-full-screen .fs-chat.show,
+.fs-wrapper.fullscreen .fs-chat.show { width:260px; }
 
 /* FS Chat — flex sibling in fullscreen, hidden in normal mode */
 .fs-chat { display:none; width:0; flex-shrink:0; overflow:hidden; transition:width .2s ease; flex-direction:column; background:var(--surface3); border-left:1px solid var(--border); }
@@ -1476,25 +1518,49 @@ function updateVolIcon(vol){
 }
 
 // ── FULLSCREEN ──
-let isFsChat=false;
+let isFsChat = false;
+
 function toggleFullscreen(){
-  const wrapper=document.getElementById('fsWrapper');
-  const isFs=wrapper.classList.contains('fullscreen');
+  const wrapper = document.getElementById('fsWrapper');
+  const isFs = !!document.fullscreenElement || !!document.webkitFullscreenElement;
+
   if(!isFs){
-    wrapper.classList.add('fullscreen','show-controls');
+    // Enter fullscreen — request on wrapper so our UI stays inside
+    const el = wrapper;
+    if(el.requestFullscreen) el.requestFullscreen();
+    else if(el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+    else if(el.mozRequestFullScreen) el.mozRequestFullScreen();
+  } else {
+    if(document.exitFullscreen) document.exitFullscreen();
+    else if(document.webkitExitFullscreen) document.webkitExitFullscreen();
+    else if(document.mozCancelFullScreen) document.mozCancelFullScreen();
+  }
+}
+
+// Listen to fullscreen change events (covers F11, Esc, browser button)
+function onFullscreenChange(){
+  const wrapper = document.getElementById('fsWrapper');
+  const isFs = !!document.fullscreenElement || !!document.webkitFullscreenElement;
+
+  if(isFs){
+    wrapper.classList.add('fullscreen');
     document.getElementById('fsIcon').innerHTML='<path d="M8 3v3a2 2 0 01-2 2H3m18 0h-3a2 2 0 01-2-2V3m0 18v-3a2 2 0 012-2h3M3 16h3a2 2 0 012 2v3"/>';
-    setTimeout(()=>wrapper.classList.remove('show-controls'),3000);
-    // Auto-open chat
-    isFsChat=true;
+    // Show chat
+    isFsChat = true;
     document.getElementById('fsChat').classList.add('show');
     syncFsChat();
+    showControls();
   } else {
     wrapper.classList.remove('fullscreen','show-controls');
     document.getElementById('fsIcon').innerHTML='<path d="M8 3H5a2 2 0 00-2 2v3m18 0V5a2 2 0 00-2-2h-3m0 18h3a2 2 0 002-2v-3M3 16v3a2 2 0 002 2h3"/>';
     document.getElementById('fsChat').classList.remove('show');
-    isFsChat=false;
+    isFsChat = false;
   }
 }
+document.addEventListener('fullscreenchange', onFullscreenChange);
+document.addEventListener('webkitfullscreenchange', onFullscreenChange);
+document.addEventListener('mozfullscreenchange', onFullscreenChange);
+
 function toggleFsChat(){
   isFsChat=!isFsChat;
   document.getElementById('fsChat').classList.toggle('show',isFsChat);
