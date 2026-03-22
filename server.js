@@ -1,968 +1,2159 @@
-const express = require('express');
-const http = require('http');
-const { WebSocketServer } = require('ws');
-const path = require('path');
-const fs = require('fs');
-const crypto = require('crypto');
-const multer = require('multer');
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Watch Together</title>
+<!-- FIX [MED-5]: тема применяется ПЕРВОЙ, до всех внешних ресурсов — устраняет FOUC -->
+<script>
+  (function(){
+    var t = localStorage.getItem('wt-theme');
+    if(!t) { t = 'dark'; localStorage.setItem('wt-theme', 'dark'); }
+    document.documentElement.setAttribute('data-theme', t);
+  })();
+</script>
+<link rel="icon" type="image/x-icon" href="/favicon.ico?v=2">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png?v=2">
+<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png?v=2">
+<link rel="apple-touch-icon" href="/favicon-32.png?v=2">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@300;400;700&family=Noto+Sans+JP:wght@300;400&family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300&display=swap" rel="stylesheet">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
 
-const app = express();
-const server = http.createServer(app);
-const wss = new WebSocketServer({ server });
+:root {
+  --bg: #f5eee8; --text: #3a2e28; --text-muted: rgba(90,53,48,0.45);
+  --text-faint: rgba(90,53,48,0.3); --accent: #c07060; --accent2: #7a5548;
+  --surface: rgba(255,250,247,0.6); --surface2: rgba(255,252,250,0.55);
+  --surface3: rgba(248,240,235,0.9); --surface4: rgba(242,232,226,0.93);
+  --surface-solid: #f0e8e2;
+  --surface-modal: rgba(252,246,242,0.97);
+  --border: rgba(180,140,130,0.2); --border2: rgba(180,140,130,0.15);
+  --border-accent: rgba(180,130,115,0.3);
+  --btn-bg: rgba(200,155,140,0.18); --btn-bg-hover: rgba(200,155,140,0.32);
+  --btn-active-bg: rgba(200,155,140,0.25); --tab-bg: rgba(200,170,155,0.12);
+  --msg-bg: rgba(255,250,247,0.6); --logo-color: #5a3530;
+  --badge-bg: rgba(200,155,140,0.15); --upload-border: rgba(180,130,115,0.35);
+  --upload-bg: rgba(255,248,245,0.4); --progress-bg: rgba(180,140,130,0.2);
+  --spinner-border: rgba(180,140,130,0.2); --scrollbar: rgba(180,140,130,0.15);
+  --video-area-bg: rgba(230,218,212,0.6); --petal-color: rgba(245,195,205,0.75);
+  --bg-base: #f0e4dc;
+}
+[data-theme="dark"] {
+  --bg: #000; --text: #e8e8e8; --text-muted: rgba(200,200,200,0.5);
+  --text-faint: rgba(200,200,200,0.28); --accent: #e8306a; --accent2: #c02255;
+  --surface: rgba(18,18,18,0.85); --surface2: rgba(14,14,14,0.75);
+  --surface3: rgba(12,12,12,0.95); --surface4: rgba(8,8,8,0.97);
+  --surface-solid: #0d0d0d;
+  --surface-modal: rgba(15,15,15,0.98);
+  --border: rgba(255,255,255,0.08); --border2: rgba(255,255,255,0.05);
+  --border-accent: rgba(232,48,106,0.25);
+  --btn-bg: rgba(232,48,106,0.1); --btn-bg-hover: rgba(232,48,106,0.22);
+  --btn-active-bg: rgba(232,48,106,0.16); --tab-bg: rgba(255,255,255,0.04);
+  --msg-bg: rgba(20,20,20,0.8); --logo-color: #fff;
+  --badge-bg: rgba(232,48,106,0.1); --upload-border: rgba(255,255,255,0.15);
+  --upload-bg: rgba(18,18,18,0.6); --progress-bg: rgba(255,255,255,0.1);
+  --spinner-border: rgba(255,255,255,0.08); --scrollbar: rgba(255,255,255,0.07);
+  --video-area-bg: #000; --petal-color: rgba(232,48,106,0.3);
+  --bg-base: #000;
+}
+body { background: var(--bg-base); color: var(--text); font-family: 'Cormorant Garamond','Noto Sans JP',serif; transition: background 0.4s,color 0.3s; }
+#bgCanvas { position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:0; }
+.petal { position:fixed;top:-20px;border-radius:50% 0 50% 0;animation:fall linear infinite;pointer-events:none;z-index:1;filter:blur(0.5px);background:var(--petal-color); }
+@keyframes fall { 0%{transform:translateX(0) rotate(0deg);opacity:.9}50%{transform:translateX(40px) rotate(180deg);opacity:.6}100%{transform:translateX(-20px) rotate(360deg) translateY(110vh);opacity:0} }
 
-app.use(express.json({ limit: '2mb' }));
+/* TOOLBAR */
+.toolbar-row { position:fixed;top:.75rem;right:1rem;z-index:200;display:flex;gap:.5rem;align-items:center; }
+.lang-bar,.theme-bar { display:flex;gap:.25rem;background:var(--surface3);border:1px solid var(--border);border-radius:20px;padding:.3rem .5rem;backdrop-filter:blur(8px); }
+.lang-btn,.theme-btn { border:none;background:transparent;font-family:'Cormorant Garamond',serif;font-size:.72rem;color:var(--text-muted);cursor:pointer;padding:.2rem .5rem;border-radius:12px;transition:all .2s;letter-spacing:.04em; }
+.lang-btn.active,.theme-btn.active { background:var(--btn-active-bg);color:var(--logo-color);font-weight:500; }
+.lang-btn:hover,.theme-btn:hover { color:var(--logo-color); }
+.theme-btn { display:flex;align-items:center;justify-content:center;color:var(--text-muted); }
+.theme-btn svg { width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round; }
 
-// ── DATA & UPLOAD DIRS ──
-const DATA_DIR = path.join(__dirname, 'data');
-const UPLOAD_DIR = path.join(__dirname, 'uploads');
-[DATA_DIR, UPLOAD_DIR].forEach(d => { if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true }); });
+/* LOBBY */
+#lobby { width:100%;height:100dvh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:2rem;position:relative;z-index:2;overflow-y:auto; }
+.lobby-logo { font-family:'Noto Serif JP',serif;font-size:clamp(2rem,5vw,3rem);font-weight:300;color:var(--logo-color);letter-spacing:.12em;margin-bottom:2.5rem;text-align:center; }
+.lobby-card { background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:2rem;width:100%;max-width:380px;backdrop-filter:blur(12px);box-shadow:0 8px 40px rgba(0,0,0,0.08); }
+/* панели лобби */
+.lobby-panel { display:none;flex-direction:column;gap:0; }
+.lobby-panel.active { display:flex; }
+.lobby-panel-title { font-family:'Cormorant Garamond',serif;font-size:1.15rem;color:var(--logo-color);letter-spacing:.06em;margin-bottom:1.5rem;text-align:center; }
+/* разделитель с текстом */
+.lobby-divider { display:flex;align-items:center;gap:.6rem;margin:1rem 0; }
+.lobby-divider::before,.lobby-divider::after { content:'';flex:1;height:1px;background:var(--border); }
+.lobby-divider span { font-size:.65rem;color:var(--text-faint);font-family:monospace;letter-spacing:.08em;white-space:nowrap; }
+/* вторичная кнопка (outlined) */
+.lobby-btn-ghost { width:100%;padding:.75rem;border:1px solid var(--border);border-radius:12px;background:transparent;color:var(--text-muted);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:.88rem;letter-spacing:.04em;cursor:pointer;transition:all .2s;display:flex;align-items:center;justify-content:center;gap:.5rem;line-height:1; }
+.lobby-btn-ghost:hover { border-color:var(--border-accent);color:var(--logo-color);background:var(--btn-bg); }
+.tabs { display:flex;gap:.4rem;background:var(--tab-bg);padding:.3rem;border-radius:12px;margin-bottom:1.5rem; }
+.tab { flex:1;padding:.6rem;border:none;border-radius:9px;background:transparent;color:var(--text-muted);font-family:'Cormorant Garamond',serif;font-size:.92rem;letter-spacing:.05em;cursor:pointer;transition:all .2s; }
+.tab.active { background:var(--btn-active-bg);border:1px solid var(--border-accent);color:var(--logo-color); }
+.field-label { display:block;font-size:.68rem;color:var(--text-muted);letter-spacing:.12em;text-transform:uppercase;font-family:'Cormorant Garamond',serif;margin-bottom:.4rem; }
+.field-input { width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:.75rem .9rem;color:var(--text);font-family:'Cormorant Garamond',serif;font-size:1rem;outline:none;margin-bottom:1rem;transition:border-color .2s; }
+.field-input:focus { border-color:var(--border-accent); }
+.field-input::placeholder { color:var(--text-faint); }
+.lobby-btn { width:100%;padding:.85rem;border:1px solid var(--border-accent);border-radius:12px;background:var(--btn-bg);color:var(--logo-color);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:.95rem;letter-spacing:.05em;cursor:pointer;transition:all .2s;display:flex;align-items:center;justify-content:center;gap:.5rem;line-height:1; }
+.lobby-btn:hover { background:var(--btn-bg-hover);transform:translateY(-1px); }
+.lobby-btn:disabled { opacity:.5;cursor:not-allowed;transform:none; }
+.auth-status { font-size:.72rem;font-family:monospace;color:var(--accent);text-align:center;padding:.3rem 0; }
+.auth-user-info { display:flex;align-items:center;gap:.5rem;justify-content:center;margin-bottom:.75rem; }
+.auth-avatar { font-size:1.2rem; }
+.auth-username { font-family:monospace;font-size:.8rem;color:var(--text-muted); }
+.auth-logout-btn { background:transparent;border:none;font-size:.65rem;color:var(--text-faint);cursor:pointer;text-decoration:underline;font-family:monospace; }
+.auth-logout-btn:hover { color:var(--accent); }
 
-// ── SIMPLE DB (JSON with atomic write + in-memory cache) ──
-const USERS_FILE = path.join(DATA_DIR, 'users.json');
-const SESSIONS_FILE = path.join(DATA_DIR, 'sessions.json');
+/* APP */
+#app { display:none;flex-direction:column;width:100%;height:100dvh;position:relative;z-index:2;overflow:hidden; }
+.topbar { display:flex;align-items:center;justify-content:space-between;padding:.6rem 1rem;background:var(--surface3);border-bottom:1px solid var(--border);flex-shrink:0;z-index:10;backdrop-filter:blur(12px);min-height:48px; }
+.topbar-left,.topbar-right { display:flex;align-items:center;gap:.6rem; }
+.icon-btn { width:32px;height:32px;border:1px solid var(--border);border-radius:50%;background:var(--btn-bg);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .2s;color:var(--accent2); }
+.icon-btn:hover { background:var(--btn-bg-hover); }
+.icon-btn svg { width:15px;height:15px;stroke:var(--accent2);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round; }
+.topbar-logo { font-family:'Noto Serif JP',serif;font-size:1rem;font-weight:400;color:var(--logo-color);letter-spacing:.1em; }
+.room-badge { display:flex;align-items:center;gap:.45rem;background:var(--badge-bg);border:1px solid var(--border-accent);border-radius:20px;padding:.3rem .5rem .3rem .85rem;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:.76rem;color:var(--text-muted); }
+.room-dot { width:5px;height:5px;border-radius:50%;background:var(--accent);animation:glow 2s infinite; }
+@keyframes glow { 0%,100%{opacity:1}50%{opacity:.3} }
+.viewers-count { font-family:monospace;font-size:.75rem;color:var(--text-muted);display:flex;align-items:center;gap:.3rem; }
+.viewers-count svg { width:13px;height:13px;stroke:var(--text-muted);fill:none;stroke-width:1.8; }
 
-let _usersCache = null;
-let _sessionsCache = null;
+.main-layout { display:flex;flex-direction:row;flex:1;min-height:0;overflow:hidden;width:100%; }
+.video-area { flex:1;min-width:0;min-height:0;display:flex;flex-direction:column;background:var(--bg-base);position:relative;overflow:hidden; }
+[data-theme="light"] .video-area:not(.has-video)::before {
+  content:'';position:absolute;inset:0;
+  background: radial-gradient(ellipse at 20% 50%, rgba(255,230,220,0.7) 0%, transparent 60%),
+              radial-gradient(ellipse at 80% 20%, rgba(255,210,220,0.5) 0%, transparent 50%),
+              linear-gradient(135deg, #f5ede6 0%, #f0e0d5 50%, #ecddd5 100%);
+  pointer-events:none;z-index:0;
+}
+.video-area.has-video { background:#000; }
 
-// FIX [CRIT-1]: Mutex для предотвращения race condition при конкурентных записях
-const _writeLocks = {};
-async function withLock(key, fn) {
-  while (_writeLocks[key]) {
-    await new Promise(r => setTimeout(r, 5));
+/* upload-zone и upload-progress — обычный flex-поток, занимают всё место */
+.upload-zone { flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1rem;cursor:pointer;position:relative;z-index:1;transition:background 0.3s; }
+.upload-circle { width:88px;height:88px;border:1.5px dashed var(--upload-border);border-radius:50%;display:flex;align-items:center;justify-content:center;animation:float 3s ease-in-out infinite;background:var(--upload-bg);transition:transform 0.3s,border-color 0.3s; }
+.upload-circle svg { width:32px;height:32px;stroke:var(--accent);fill:none;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round; }
+@keyframes float { 0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)} }
+.upload-title { font-family:'Cormorant Garamond',serif;font-size:1.05rem;color:var(--text-muted);letter-spacing:.08em; }
+.upload-sub { font-size:.7rem;color:var(--text-faint);font-family:monospace;letter-spacing:.04em; }
+#fileInput { display:none; }
+
+/* upload-progress — тоже нормальный поток, скрыт по умолчанию */
+.upload-progress { display:none;flex-direction:column;align-items:center;justify-content:center;gap:1.25rem;flex:1;padding:2rem;position:relative;z-index:1; }
+.upload-progress.active { display:flex; }
+.upload-progress-bar { width:260px;height:6px;background:var(--progress-bg);border-radius:3px;overflow:hidden; }
+.upload-progress-fill { height:100%;width:0%;background:var(--accent);border-radius:3px;transition:width .15s; }
+.upload-progress-label { font-family:monospace;font-size:.85rem;color:var(--text-muted);letter-spacing:.04em; }
+.upload-info { font-family:monospace;font-size:.72rem;color:var(--text-faint);margin-top:-.25rem; }
+
+.waiting-screen { flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1rem; }
+.waiting-spinner { width:34px;height:34px;border:1.5px solid var(--spinner-border);border-top-color:var(--accent);border-radius:50%;animation:spin 1s linear infinite; }
+@keyframes spin { to{transform:rotate(360deg)} }
+.waiting-text { font-size:.82rem;color:var(--text-muted);font-family:monospace; }
+
+.player-controls {
+  position:absolute;bottom:0;left:0;right:0;
+  background:linear-gradient(to top,rgba(0,0,0,0.85) 0%,rgba(0,0,0,0.4) 70%,transparent 100%);
+  padding:.75rem 1.25rem 1rem;z-index:5;
+  opacity:0;transition:opacity .25s;pointer-events:none;
+}
+.player-controls.visible { opacity:1;pointer-events:all; }
+
+#videoPlayer {
+  display:none;background:#000;
+  position:absolute;inset:0;
+  width:100%;height:100%;
+  object-fit:cover;
+}
+#videoPlayer::-webkit-media-controls,
+#videoPlayer::-webkit-media-controls-enclosure,
+#videoPlayer::-webkit-media-controls-panel { display:none!important; }
+
+/* ── FULLSCREEN ── */
+#app.fs-mode,
+#app:fullscreen,
+#app:-webkit-full-screen,
+#app:-moz-full-screen {
+  position:fixed!important;inset:0!important;z-index:9999!important;
+  display:flex!important;flex-direction:column!important;
+  width:100vw!important;height:100vh!important;
+  overflow:hidden!important;background:#000!important;
+}
+#app.fs-mode .topbar,
+#app:fullscreen .topbar,
+#app:-webkit-full-screen .topbar { display:none!important; }
+#app.fs-mode .sidebar,
+#app:fullscreen .sidebar,
+#app:-webkit-full-screen .sidebar { display:none!important; }
+#app.fs-mode .upload-zone,
+#app.fs-mode .upload-progress,
+#app.fs-mode .waiting-screen,
+#app:fullscreen .upload-zone,
+#app:fullscreen .upload-progress,
+#app:fullscreen .waiting-screen { display:none!important; }
+/* fs-wrapper = горизонтальный ряд: видео | чат */
+#app.fs-mode .fs-wrapper,
+#app:fullscreen .fs-wrapper,
+#app:-webkit-full-screen .fs-wrapper {
+  display:flex!important;flex-direction:row!important;
+  flex:1!important;overflow:hidden!important;min-height:0!important;
+}
+#app.fs-mode .main-layout,
+#app:fullscreen .main-layout,
+#app:-webkit-full-screen .main-layout {
+  flex:1!important;display:flex!important;min-width:0!important;overflow:hidden!important;
+}
+#app.fs-mode .video-area,
+#app:fullscreen .video-area,
+#app:-webkit-full-screen .video-area {
+  flex:1!important;position:relative!important;background:#000!important;
+  overflow:hidden!important;min-width:0!important;cursor:none;
+}
+#app.fs-mode.show-ctrl .video-area,
+#app:fullscreen.show-ctrl .video-area { cursor:default; }
+#app.fs-mode #videoPlayer,
+#app:fullscreen #videoPlayer,
+#app:-webkit-full-screen #videoPlayer {
+  display:block!important;position:absolute!important;inset:0!important;
+  width:100%!important;height:100%!important;object-fit:cover!important;
+}
+#app.fs-mode .player-controls,
+#app:fullscreen .player-controls,
+#app:-webkit-full-screen .player-controls {
+  position:absolute!important;bottom:0!important;left:0!important;right:0!important;z-index:10!important;
+}
+/* fs-chat — всегда открыт в fullscreen, тема из CSS-переменных */
+#app.fs-mode .fs-chat,
+#app:fullscreen .fs-chat,
+#app:-webkit-full-screen .fs-chat {
+  display:flex!important;flex-direction:column!important;
+  width:280px!important;flex-shrink:0!important;height:100%!important;
+  background:var(--surface-solid)!important;
+  border-left:1px solid var(--border)!important;
+  overflow:hidden!important;
+}
+body:has(#app.fs-mode) .toolbar-row,
+body:has(#app:fullscreen) .toolbar-row { display:none!important; }
+
+.player-progress-wrap { display:flex;align-items:center;gap:.75rem;margin-bottom:.5rem; }
+.player-progress-bg { flex:1;height:4px;background:rgba(255,255,255,0.15);border-radius:4px;cursor:pointer;position:relative;transition:height .15s; }
+.player-progress-bg:hover { height:6px; }
+.player-progress-fill { position:absolute;left:0;top:0;height:100%;background:var(--accent);border-radius:4px;pointer-events:none; }
+.player-progress-thumb { position:absolute;top:50%;transform:translate(-50%,-50%);width:13px;height:13px;border-radius:50%;background:#fff;pointer-events:none;box-shadow:0 0 4px rgba(0,0,0,0.4);opacity:0;transition:opacity .15s; }
+.player-progress-bg:hover .player-progress-thumb { opacity:1; }
+.player-time { font-family:monospace;font-size:.68rem;color:rgba(255,255,255,0.55);white-space:nowrap;flex-shrink:0; }
+.player-row { display:flex;align-items:center;justify-content:space-between; }
+.player-left,.player-right { display:flex;align-items:center;gap:.25rem; }
+.player-btn { width:36px;height:36px;border:none;background:transparent;display:flex;align-items:center;justify-content:center;cursor:pointer;border-radius:8px;color:rgba(255,255,255,0.7);transition:all .15s; }
+.player-btn:hover { color:#fff;background:rgba(255,255,255,0.1); }
+.player-vol-wrap { display:flex;align-items:center;gap:.25rem; }
+.player-vol-slider { width:72px;height:3px;-webkit-appearance:none;background:rgba(255,255,255,0.2);border-radius:2px;outline:none;cursor:pointer; }
+.player-vol-slider::-webkit-slider-thumb { -webkit-appearance:none;width:11px;height:11px;border-radius:50%;background:#fff;cursor:pointer; }
+.codec-warning { position:absolute;top:1rem;left:50%;transform:translateX(-50%);background:rgba(200,80,40,0.92);border-radius:10px;padding:.5rem 1rem;font-family:monospace;font-size:.72rem;color:#fff;z-index:15;white-space:nowrap;display:none; }
+.codec-warning.show { display:block; }
+
+.fs-wrapper { display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden;width:100%; }
+.fs-wrapper .main-layout { flex:1;min-height:0;overflow:hidden; }
+#videoPlayer::-webkit-media-controls-overlay-play-button { display:none!important;opacity:0!important; }
+video::-webkit-media-controls { display:none!important; }
+video::-webkit-media-controls-start-playback-button { display:none!important; }
+
+.fs-chat { display:none;flex-direction:column;background:var(--surface3);border-left:1px solid var(--border);overflow:hidden; }
+.fs-chat .messages { flex:1;padding:.75rem;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--scrollbar) transparent;min-height:0; }
+.fs-chat .messages .msg-text { background:var(--msg-bg);border-color:var(--border2);color:var(--text); }
+.fs-chat .messages .msg-author { color:var(--accent); }
+.fs-chat .messages .msg-system .msg-text { color:var(--text-faint); }
+.fs-chat .chat-input-wrap { border-top:1px solid var(--border2);padding:.5rem;flex-shrink:0;display:flex;gap:.4rem; }
+.fs-chat .chat-input { background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:.5rem .7rem;font-size:.82rem;outline:none;flex:1; }
+.fs-chat .chat-input::placeholder { color:var(--text-faint); }
+.fs-chat-header { flex-shrink:0; }
+
+.sidebar { width:300px;flex-shrink:0;background:var(--surface3);border-left:1px solid var(--border2);display:flex;flex-direction:column;overflow:hidden;backdrop-filter:blur(12px); }
+.sidebar-header { padding:.8rem 1.25rem;border-bottom:1px solid var(--border2);display:flex;align-items:center;gap:.5rem;font-size:.68rem;color:var(--text-faint);letter-spacing:.12em;text-transform:uppercase;font-family:monospace; }
+.sidebar-header svg { width:13px;height:13px;stroke:var(--text-faint);fill:none;stroke-width:1.8; }
+.messages { flex:1;overflow-y:auto;padding:1rem;display:flex;flex-direction:column;gap:.55rem;scrollbar-width:thin;scrollbar-color:var(--scrollbar) transparent; }
+.msg { display:flex;flex-direction:column;gap:.15rem; }
+.msg-author { font-size:.72rem;font-family:monospace;color:var(--accent);letter-spacing:.04em; }
+.msg-text { font-size:.85rem;line-height:1.5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--msg-bg);border:1px solid var(--border2);padding:.45rem .75rem;border-radius:0 8px 8px 8px;color:var(--text);word-break:break-word; }
+.msg-system .msg-text { background:transparent;border:none;color:var(--text-faint);font-size:.68rem;font-family:monospace;padding:.1rem 0; }
+.chat-input-wrap { padding:.75rem;border-top:1px solid var(--border2);display:flex;gap:.45rem; }
+.chat-input { flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:.6rem .9rem;color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:.9rem;outline:none;transition:border-color .2s; }
+.chat-input:focus { border-color:var(--border-accent); }
+.chat-input::placeholder { color:var(--text-faint); }
+.send-btn { background:var(--btn-bg);border:1px solid var(--border-accent);border-radius:8px;width:38px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .15s; }
+.send-btn:hover { background:var(--btn-bg-hover); }
+.send-btn svg { width:14px;height:14px;stroke:var(--accent);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round; }
+
+.modal-overlay { display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:100;align-items:center;justify-content:center;backdrop-filter:blur(4px); }
+.modal-overlay.open { display:flex; }
+.modal { background:var(--surface-modal);border:1px solid var(--border);border-radius:20px;padding:2rem;width:90%;max-width:400px;box-shadow:0 12px 50px rgba(0,0,0,.15); }
+
+.queue-popup {
+  position:fixed;bottom:80px;left:50%;transform:translateX(-50%) translateY(8px);
+  width:min(480px,92vw);background:var(--surface-modal);border:1px solid var(--border);
+  border-radius:18px;box-shadow:0 16px 60px rgba(0,0,0,0.25);z-index:90;
+  display:none;flex-direction:column;overflow:hidden;backdrop-filter:blur(16px);
+  transition:opacity .2s,transform .2s;opacity:0;
+}
+.queue-popup.open { display:flex;opacity:1;transform:translateX(-50%) translateY(0); }
+.queue-header { display:flex;align-items:center;justify-content:space-between;padding:.85rem 1.1rem .7rem;border-bottom:1px solid var(--border2);flex-shrink:0; }
+.queue-title { font-family:'Cormorant Garamond',serif;font-size:1rem;color:var(--logo-color);letter-spacing:.06em;display:flex;align-items:center;gap:.5rem; }
+.queue-title svg { width:14px;height:14px;stroke:var(--accent);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round; }
+.queue-count { font-family:monospace;font-size:.65rem;background:var(--badge-bg);border:1px solid var(--border-accent);border-radius:10px;padding:.1rem .45rem;color:var(--accent); }
+.queue-close { background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:1.1rem;padding:.2rem;transition:color .15s;line-height:1; }
+.queue-close:hover { color:var(--text); }
+.queue-add-row { padding:.65rem .9rem;border-bottom:1px solid var(--border2);display:flex;gap:.5rem;flex-shrink:0; }
+.queue-add-btn { display:flex;align-items:center;gap:.4rem;background:var(--btn-bg);border:1px solid var(--border-accent);border-radius:10px;padding:.5rem .9rem;color:var(--accent2);font-family:'Cormorant Garamond',serif;font-size:.88rem;cursor:pointer;transition:background .15s;white-space:nowrap; }
+.queue-add-btn:hover { background:var(--btn-bg-hover); }
+.queue-add-btn svg { width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round; }
+.queue-list { flex:1;overflow-y:auto;padding:.5rem .6rem;max-height:320px;min-height:60px;scrollbar-width:thin;scrollbar-color:var(--scrollbar) transparent; }
+.queue-empty { padding:2rem 1rem;text-align:center;color:var(--text-faint);font-size:.78rem;font-family:monospace; }
+.queue-item { display:flex;align-items:center;gap:.6rem;padding:.55rem .5rem;border-radius:10px;transition:background .15s;cursor:default;position:relative;border:1px solid transparent; }
+.queue-item:hover { background:var(--btn-bg); }
+.queue-item.dragging { opacity:.4; }
+.queue-item.drag-over { border-color:var(--border-accent);background:var(--btn-bg); }
+.queue-item.active-item { background:var(--btn-active-bg);border-color:var(--border-accent); }
+.queue-drag-handle { cursor:grab;color:var(--text-faint);flex-shrink:0;display:flex;align-items:center;padding:.1rem .1rem;transition:color .15s; }
+.queue-drag-handle:active { cursor:grabbing; }
+.queue-drag-handle:hover { color:var(--text-muted); }
+.queue-drag-handle svg { width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round; }
+.queue-item-num { font-family:monospace;font-size:.62rem;color:var(--text-faint);min-width:16px;text-align:center;flex-shrink:0; }
+.queue-item.active-item .queue-item-num { color:var(--accent); }
+.queue-item-icon { flex-shrink:0; }
+.queue-item-icon svg { width:14px;height:14px;stroke:var(--text-faint);fill:none;stroke-width:1.8;stroke-linecap:round; }
+.queue-item.active-item .queue-item-icon svg { stroke:var(--accent); }
+.queue-item-name { flex:1;min-width:0;font-size:.82rem;color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+.queue-item.active-item .queue-item-name { color:var(--logo-color);font-weight:500; }
+.queue-item-playing { font-family:monospace;font-size:.6rem;color:var(--accent);letter-spacing:.06em;flex-shrink:0;display:none; }
+.queue-item.active-item .queue-item-playing { display:block; }
+.queue-delete-btn { width:24px;height:24px;border-radius:6px;border:1px solid transparent;background:transparent;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text-faint);transition:all .15s;flex-shrink:0;opacity:0; }
+.queue-item:hover .queue-delete-btn { opacity:1; }
+.queue-delete-btn:hover { border-color:rgba(232,48,106,.3);color:var(--accent);background:var(--btn-bg-hover); }
+.queue-delete-btn svg { width:11px;height:11px;stroke:currentColor;fill:none;stroke-width:2.5;stroke-linecap:round; }
+.queue-btn-badge { position:absolute;top:-3px;right:-3px;min-width:14px;height:14px;border-radius:7px;background:var(--accent);border:2px solid var(--bg-base,#000);font-family:monospace;font-size:.55rem;color:#fff;display:none;align-items:center;justify-content:center;padding:0 2px; }
+.queue-btn-badge.show { display:flex; }
+
+.modal-title { font-family:'Cormorant Garamond',serif;font-size:1.2rem;font-weight:400;color:var(--logo-color);margin-bottom:.35rem;letter-spacing:.06em; }
+.modal-sub { font-size:.72rem;color:var(--text-faint);margin-bottom:1.4rem;font-family:monospace; }
+.copy-row { display:flex;gap:.45rem;margin-bottom:1.2rem; }
+.copy-input { flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:.6rem .85rem;color:var(--text-muted);font-family:monospace;font-size:.73rem;outline:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+.copy-btn { background:var(--btn-bg);border:1px solid var(--border-accent);border-radius:8px;padding:0 .9rem;color:var(--accent2);font-family:'Cormorant Garamond',serif;font-size:.9rem;cursor:pointer;white-space:nowrap;transition:background .15s; }
+.copy-btn:hover { background:var(--btn-bg-hover); }
+.room-code-big { text-align:center;font-size:2rem;font-weight:400;letter-spacing:.25em;color:var(--accent2);font-family:monospace;margin:.4rem 0 1.2rem; }
+.or-divider { text-align:center;font-family:monospace;font-size:.68rem;color:var(--text-faint);margin-bottom:.4rem; }
+.modal-close { width:100%;padding:.75rem;border:1px solid var(--border);border-radius:10px;background:transparent;color:var(--text-muted);font-family:'Cormorant Garamond',serif;font-size:.92rem;cursor:pointer;transition:all .15s; }
+.modal-close:hover { border-color:var(--border-accent);color:var(--accent2); }
+
+.friends-btn { width:32px;height:32px;border:1px solid var(--border);border-radius:50%;background:var(--btn-bg);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .2s;position:relative; }
+.friends-btn:hover { background:var(--btn-bg-hover); }
+.friends-btn svg { width:15px;height:15px;stroke:var(--accent2);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round; }
+.friends-notif { position:absolute;top:-3px;right:-3px;width:10px;height:10px;border-radius:50%;background:var(--accent);border:2px solid var(--bg-base,#000);display:none; }
+.friends-notif.show { display:block; }
+.friends-panel { position:fixed;top:0;right:-320px;width:300px;height:100vh;background:var(--surface3);border-left:1px solid var(--border);z-index:50;display:flex;flex-direction:column;transition:right .3s cubic-bezier(.4,0,.2,1);backdrop-filter:blur(16px); }
+.friends-panel.open { right:0; }
+.fp-header { display:flex;align-items:center;justify-content:space-between;padding:1rem 1.25rem;border-bottom:1px solid var(--border2); }
+.fp-title { font-family:'Cormorant Garamond',serif;font-size:1.1rem;color:var(--logo-color);letter-spacing:.06em; }
+.fp-close { background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:1.2rem;padding:.2rem;transition:color .2s; }
+.fp-close:hover { color:var(--text); }
+.fp-add { padding:.75rem 1rem;border-bottom:1px solid var(--border2);display:flex;gap:.4rem; }
+.fp-add input { flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:.5rem .75rem;color:var(--text);font-family:'Cormorant Garamond',serif;font-size:.88rem;outline:none;transition:border-color .2s; }
+.fp-add input:focus { border-color:var(--border-accent); }
+.fp-add input::placeholder { color:var(--text-faint); }
+.fp-add-btn { background:var(--btn-bg);border:1px solid var(--border-accent);border-radius:8px;padding:0 .75rem;color:var(--accent2);font-size:.8rem;cursor:pointer;transition:background .15s;white-space:nowrap;font-family:'Cormorant Garamond',serif; }
+.fp-add-btn:hover { background:var(--btn-bg-hover); }
+.fp-section { padding:.5rem 1rem .25rem;font-size:.62rem;color:var(--text-faint);letter-spacing:.1em;text-transform:uppercase;font-family:monospace; }
+.fp-list { flex:1;overflow-y:auto;padding:.25rem 0;scrollbar-width:thin;scrollbar-color:var(--scrollbar) transparent; }
+.fp-item { display:flex;align-items:center;gap:.75rem;padding:.6rem 1rem;transition:background .15s; }
+.fp-item:hover { background:var(--btn-bg); }
+.fp-avatar { width:34px;height:34px;border-radius:50%;background:var(--surface2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0;position:relative; }
+.fp-status-dot { position:absolute;bottom:0;right:0;width:9px;height:9px;border-radius:50%;border:2px solid var(--surface3); }
+.fp-status-dot.online { background:#4caf78; }
+.fp-status-dot.offline { background:var(--border); }
+.fp-info { flex:1;min-width:0; }
+.fp-name { font-size:.85rem;color:var(--text);font-family:'Cormorant Garamond',serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+.fp-status-text { font-size:.65rem;color:var(--text-faint);font-family:monospace; }
+.fp-status-text.online { color:#4caf78; }
+.fp-actions { display:flex;gap:.3rem;flex-shrink:0; }
+.fp-action-btn { width:26px;height:26px;border-radius:6px;border:1px solid var(--border);background:var(--btn-bg);cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:.75rem;transition:all .15s; }
+.fp-action-btn:hover { border-color:var(--border-accent);color:var(--accent2); }
+.fp-action-btn.accept { border-color:rgba(76,175,120,.3);color:#4caf78; }
+.fp-action-btn.accept:hover { background:rgba(76,175,120,.15); }
+.fp-action-btn.decline { border-color:rgba(232,48,106,.25);color:var(--accent); }
+.fp-action-btn.decline:hover { background:var(--btn-bg-hover); }
+.fp-empty { padding:2rem 1rem;text-align:center;color:var(--text-faint);font-size:.8rem;font-family:monospace; }
+
+.user-chip { display:flex;align-items:center;gap:.4rem;background:var(--btn-bg);border:1px solid var(--border);border-radius:20px;padding:.3rem .75rem;font-size:.75rem;color:var(--text-muted);cursor:pointer;transition:background .2s;font-family:monospace; }
+.user-chip:hover { background:var(--btn-bg-hover); }
+.user-chip-avatar { font-size:.9rem;width:22px;height:22px;border-radius:50%;display:inline-block; }
+
+.sync-indicator { position:absolute;top:.75rem;left:50%;transform:translateX(-50%);background:var(--surface3);border:1px solid var(--border-accent);border-radius:20px;padding:.35rem 1rem;font-family:monospace;font-size:.7rem;color:var(--accent);display:none;align-items:center;gap:.4rem;backdrop-filter:blur(8px);z-index:10; }
+.sync-indicator.show { display:flex; }
+
+@media(max-width:900px){ .sidebar { width:240px; } }
+@media(max-width:600px){
+  .main-layout { flex-direction:column; }
+  .sidebar { width:100%;height:220px;flex-shrink:0;border-left:none;border-top:1px solid var(--border2); }
+  .topbar-logo { font-size:.85rem; }
+  .player-btn { width:30px;height:30px; }
+  .player-vol-slider { width:50px; }
+  .player-controls { padding:.4rem .75rem .6rem; }
+  .toolbar-row { top:.5rem;right:.5rem;gap:.3rem; }
+  .lang-btn { padding:.15rem .35rem;font-size:.65rem; }
+  .lobby-card { padding:1.5rem; }
+  .lobby-logo { font-size:clamp(1.6rem,8vw,2.4rem);margin-bottom:1.75rem; }
+}
+@media(max-width:360px){ .sidebar { height:180px; } .lobby-card { padding:1rem; } }
+</style>
+</head>
+<body>
+<canvas id="bgCanvas"></canvas>
+
+<!-- TOOLBAR -->
+<div class="toolbar-row">
+  <div class="theme-bar">
+    <button class="theme-btn" onclick="setTheme('light')" id="themeLightBtn" title="Light">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+    </button>
+    <button class="theme-btn active" onclick="setTheme('dark')" id="themeDarkBtn" title="Dark">
+      <svg viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
+    </button>
+  </div>
+  <div class="lang-bar">
+    <button class="lang-btn active" onclick="setLang('en')">EN</button>
+    <button class="lang-btn" onclick="setLang('ru')">RU</button>
+    <button class="lang-btn" onclick="setLang('uk')">UK</button>
+    <button class="lang-btn" onclick="setLang('ja')">日本語</button>
+  </div>
+</div>
+
+<!-- FRIENDS PANEL -->
+<div class="friends-panel" id="friendsPanel">
+  <div class="fp-header">
+    <div class="fp-title" id="fpTitle">Friends</div>
+    <button class="fp-close" onclick="toggleFriends()">✕</button>
+  </div>
+  <div class="fp-add">
+    <input type="text" id="addFriendInput" placeholder="Add by username…" onkeydown="if(event.key==='Enter')sendFriendRequest()">
+    <button class="fp-add-btn" id="fpAddBtn" onclick="sendFriendRequest()">Add</button>
+  </div>
+  <div id="friendRequestsSection" style="display:none">
+    <div class="fp-section" id="fpRequestsLabel">Requests</div>
+    <div id="friendRequestsList"></div>
+  </div>
+  <div class="fp-section" id="fpFriendsLabel">Friends</div>
+  <div class="fp-list" id="friendsList">
+    <div class="fp-empty" id="friendsEmpty">No friends yet</div>
+  </div>
+</div>
+
+<!-- LOBBY -->
+<div id="lobby">
+  <div class="lobby-logo">Watch Together</div>
+  <div class="lobby-card">
+
+    <!-- ══ ПАНЕЛЬ: ВОЙТИ ══ -->
+    <div class="lobby-panel active" id="panelLogin">
+      <!-- Залогиненный пользователь -->
+      <div id="authUserInfo" class="auth-user-info" style="display:none">
+        <span class="auth-avatar" id="authAvatarDisplay"></span>
+        <span class="auth-username" id="authUsernameDisplay"></span>
+        <button class="auth-logout-btn" onclick="logout()" id="authLogoutBtn">Sign out</button>
+      </div>
+      <!-- Баннер верификации -->
+      <div id="verifyBanner" style="display:none;background:rgba(192,112,96,0.12);border:1px solid rgba(192,112,96,0.3);border-radius:10px;padding:.6rem .85rem;margin-bottom:.75rem;font-size:.72rem;font-family:monospace;color:var(--accent2);align-items:center;justify-content:space-between;gap:.5rem">
+        <span id="verifyBannerText">Confirm your email</span>
+        <button onclick="resendVerification()" style="background:none;border:none;cursor:pointer;font-size:.68rem;color:var(--accent);font-family:monospace;text-decoration:underline;white-space:nowrap" id="resendBtn">Resend</button>
+      </div>
+      <!-- Форма входа -->
+      <div id="loginFormFields">
+        <input type="text" class="field-input" id="authUsername" maxlength="24" placeholder="Username" autocomplete="username">
+        <input type="password" class="field-input" id="authPassword" maxlength="64" placeholder="Password" autocomplete="current-password" onkeydown="if(event.key==='Enter')authLogin()">
+        <button class="lobby-btn" onclick="authLogin()" id="authLoginBtn">
+          <span id="authLoginText">Sign in</span>
+          <svg width="1em" height="1em" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8h9M8 4l4 4-4 4"/></svg>
+        </button>
+        <div style="text-align:center;margin-top:.5rem">
+          <button onclick="showForgotPassword()" style="background:none;border:none;cursor:pointer;font-size:.68rem;color:var(--text-faint);font-family:monospace;text-decoration:underline">Forgot password?</button>
+        </div>
+        <div class="auth-status" id="authStatus"></div>
+      </div>
+      <div class="lobby-divider"><span>or</span></div>
+      <button class="lobby-btn-ghost" onclick="showPanel('panelRegister')">
+        <svg width="1em" height="1em" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="5" r="3"/><path d="M1 14s1-4 7-4 7 4 7 4"/><line x1="13" y1="3" x2="13" y2="7"/><line x1="11" y1="5" x2="15" y2="5"/></svg>
+        <span id="btnGoRegister">Create account</span>
+      </button>
+      <button class="lobby-btn-ghost" style="margin-top:.5rem" onclick="showPanel('panelGuest')">
+        <svg width="1em" height="1em" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="5" r="3"/><path d="M1 14s1-4 7-4 7 4 7 4"/></svg>
+        <span id="btnGoGuest">Continue as guest</span>
+      </button>
+    </div>
+
+    <!-- ══ ПАНЕЛЬ: ЗАРЕГИСТРИРОВАТЬСЯ ══ -->
+    <div class="lobby-panel" id="panelRegister">
+      <div class="lobby-panel-title" id="panelRegisterTitle">Create account</div>
+      <input type="text" class="field-input" id="regUsername" maxlength="24" placeholder="Username" autocomplete="username">
+      <input type="password" class="field-input" id="regPassword" maxlength="64" placeholder="Password (min 6 chars)" autocomplete="new-password">
+      <input type="email" class="field-input" id="regEmail" maxlength="128" placeholder="Email (optional, for password reset)" autocomplete="email">
+      <button class="lobby-btn" onclick="authRegister()" id="authRegisterBtn">
+        <span id="authRegisterText">Register</span>
+        <svg width="1em" height="1em" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8h9M8 4l4 4-4 4"/></svg>
+      </button>
+      <div class="auth-status" id="authRegisterStatus"></div>
+      <div class="lobby-divider"><span>or</span></div>
+      <button class="lobby-btn-ghost" onclick="showPanel('panelLogin')">
+        <svg width="1em" height="1em" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10 8H2M6 4l-4 4 4 4"/></svg>
+        <span id="btnBackToLogin">Already have account? Sign in</span>
+      </button>
+      <button class="lobby-btn-ghost" style="margin-top:.5rem" onclick="showPanel('panelGuest')">
+        <svg width="1em" height="1em" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="5" r="3"/><path d="M1 14s1-4 7-4 7 4 7 4"/></svg>
+        <span id="btnGoGuest2">Continue as guest</span>
+      </button>
+    </div>
+
+    <!-- ══ ПАНЕЛЬ: ГОСТЬ ══ -->
+    <div class="lobby-panel" id="panelGuest">
+      <div class="lobby-panel-title" id="panelGuestTitle">Guest mode</div>
+      <div class="tabs">
+        <button class="tab active" onclick="switchTab('host')" id="tabHost">Host</button>
+        <button class="tab" onclick="switchTab('join')" id="tabJoin">Join</button>
+      </div>
+      <div id="hostTab">
+        <label class="field-label" id="labelNameHost">Your name</label>
+        <input type="text" class="field-input" id="hostName" maxlength="24">
+        <button class="lobby-btn" onclick="createRoom()" id="btnCreate">
+          <span id="btnCreateText">Create room</span>
+          <svg width="1em" height="1em" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8h9M8 4l4 4-4 4"/></svg>
+        </button>
+      </div>
+      <div id="joinTab" style="display:none">
+        <label class="field-label" id="labelNameJoin">Your name</label>
+        <input type="text" class="field-input" id="joinName" maxlength="24">
+        <label class="field-label" id="labelCode">Room code</label>
+        <input type="text" class="field-input" id="joinCode" maxlength="8" style="text-transform:uppercase;letter-spacing:.12em;font-family:monospace">
+        <button class="lobby-btn" onclick="joinRoom()" id="btnJoin">
+          <span id="btnJoinText">Enter room</span>
+          <svg width="1em" height="1em" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8h9M8 4l4 4-4 4"/></svg>
+        </button>
+      </div>
+      <div class="lobby-divider"><span>or</span></div>
+      <button class="lobby-btn-ghost" onclick="showPanel('panelLogin')">
+        <svg width="1em" height="1em" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10 8H2M6 4l-4 4 4 4"/></svg>
+        <span id="btnBackToLogin2">Sign in</span>
+      </button>
+      <button class="lobby-btn-ghost" style="margin-top:.5rem" onclick="showPanel('panelRegister')">
+        <svg width="1em" height="1em" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="5" r="3"/><path d="M1 14s1-4 7-4 7 4 7 4"/><line x1="13" y1="3" x2="13" y2="7"/><line x1="11" y1="5" x2="15" y2="5"/></svg>
+        <span id="btnGoRegister2">Create account</span>
+      </button>
+    </div>
+
+  </div>
+</div>
+
+<!-- Модалка сброса пароля -->
+<div class="modal-overlay" id="forgotModal" onclick="if(event.target===this)closeForgotModal()">
+  <div class="modal">
+    <div class="modal-title" id="forgotTitle">Forgot password</div>
+    <div class="modal-sub" id="forgotSub">// enter your email to reset</div>
+    <!-- Шаг 1: ввод email -->
+    <div id="forgotStep1">
+      <input type="email" class="field-input" id="forgotEmail" placeholder="your@email.com" maxlength="128" onkeydown="if(event.key==='Enter')submitForgot()">
+      <button class="lobby-btn" onclick="submitForgot()" style="margin-bottom:.75rem" id="forgotSubmitBtn">
+        <span id="forgotSubmitText">Send reset link</span>
+      </button>
+    </div>
+    <!-- Шаг 2: новый пароль (открывается по ?reset= в URL) -->
+    <div id="forgotStep2" style="display:none">
+      <input type="password" class="field-input" id="newPassword" placeholder="New password (min 6 chars)" maxlength="64" onkeydown="if(event.key==='Enter')submitReset()">
+      <input type="password" class="field-input" id="newPasswordConfirm" placeholder="Confirm password" maxlength="64" onkeydown="if(event.key==='Enter')submitReset()">
+      <button class="lobby-btn" onclick="submitReset()" style="margin-bottom:.75rem">
+        <span>Set new password</span>
+      </button>
+    </div>
+    <div class="auth-status" id="forgotStatus"></div>
+    <button class="modal-close" onclick="closeForgotModal()"><span>Close</span></button>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app">
+  <div class="topbar">
+    <div class="topbar-left">
+      <div class="icon-btn" onclick="goHome()" id="homeBtn">
+        <svg viewBox="0 0 24 24"><path d="M3 9.5L12 3l9 6.5V20a1 1 0 01-1 1H5a1 1 0 01-1-1V9.5z"/><path d="M9 21V12h6v9"/></svg>
+      </div>
+      <div class="topbar-logo">Watch Together</div>
+      <div class="room-badge">
+        <div class="room-dot"></div>
+        <span id="roomCodeDisplay">------</span>
+      </div>
+      <div class="icon-btn" onclick="copyRoomLink()" id="roomCopyBtn" title="Copy invite link">
+        <svg viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <div class="viewers-count">
+        <svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+        <span id="viewersCount">1</span>
+      </div>
+      <div class="icon-btn" onclick="openShare()" id="inviteBtn">
+        <svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
+      </div>
+      <div class="friends-btn" onclick="toggleFriends()" id="friendsBtn" style="display:none">
+        <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+        <div class="friends-notif" id="friendsNotif"></div>
+      </div>
+      <div class="user-chip" id="userChip" onclick="toggleFriends()" style="display:none">
+        <span class="user-chip-avatar" id="userChipAvatar"></span>
+        <span id="userChipName"></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="fs-wrapper" id="fsWrapper">
+    <div class="main-layout">
+    <div class="video-area" id="videoArea">
+      <canvas id="bgCanvasInner" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:0;opacity:1;transition:opacity .4s"></canvas>
+      <div class="upload-zone" id="uploadZone" onclick="document.getElementById('fileInput').click()" style="display:none">
+        <div class="upload-circle">
+          <svg viewBox="0 0 24 24"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0018 9h-1.26A8 8 0 103 16.3"/></svg>
+        </div>
+        <div class="upload-title" id="uploadTitle">Select video</div>
+        <div class="upload-sub">MP4 · MKV · AVI · MOV · WebM · up to 4GB</div>
+        <input type="file" id="fileInput" accept="video/*" onchange="selectVideo(this)">
+      </div>
+
+      <div class="upload-progress" id="uploadProgressWrap">
+        <div class="upload-progress-label">Uploading… <span id="uploadPct">0%</span></div>
+        <div class="upload-progress-bar"><div class="upload-progress-fill" id="uploadFill"></div></div>
+        <div class="upload-info" id="uploadInfo"></div>
+      </div>
+
+      <div class="waiting-screen" id="waitingScreen" style="display:none">
+        <div class="waiting-spinner"></div>
+        <div class="waiting-text" id="waitingText">Waiting for host…</div>
+      </div>
+
+      <video id="videoPlayer" disablepictureinpicture disableremoteplayback controlslist="nodownload noremoteplayback noplaybackrate" x-webkit-airplay="deny" webkit-playsinline playsinline></video>
+
+      <div class="codec-warning" id="codecWarning">⚠ MKV/HEVC may not play in Chrome — try MP4 or use Opera/Edge</div>
+      <div class="sync-indicator" id="syncIndicator">⟳ Syncing…</div>
+
+      <!-- FPS счётчик — двойной клик по видео для включения/выключения -->
+      <div id="fpsOverlay" style="display:none;position:absolute;top:.6rem;left:.6rem;z-index:20;
+        background:rgba(0,0,0,0.65);color:#00ff88;font-family:monospace;font-size:.72rem;
+        padding:.3rem .6rem;border-radius:6px;pointer-events:none;line-height:1.7;
+        border:1px solid rgba(255,255,255,0.1);">
+        <div id="fpsVal">FPS: —</div>
+        <div id="fpsDropped" style="color:#ffaa00;"></div>
+        <div id="fpsRes" style="color:rgba(255,255,255,0.5);"></div>
+      </div>
+
+      <!-- FPS оверлей — включается двойным кликом по углу -->
+      <div id="fpsOverlay" style="display:none;position:absolute;top:.6rem;left:.6rem;z-index:20;background:rgba(0,0,0,0.6);color:#0f0;font-family:monospace;font-size:.72rem;padding:.25rem .55rem;border-radius:6px;pointer-events:none;line-height:1.6;backdrop-filter:blur(2px);">
+        <div id="fpsVal">FPS: —</div>
+        <div id="fpsDropped" style="color:#fa0;"></div>
+        <div id="fpsRes" style="color:#aaa;"></div>
+      </div>
+
+      <div class="player-controls" id="controls" style="display:none">
+        <div class="player-progress-wrap">
+          <div class="player-progress-bg" id="progressBg" onclick="seekByClick(event)" onmousedown="startDrag(event)">
+            <div class="player-progress-fill" id="progressFill"></div>
+            <div class="player-progress-thumb" id="progressThumb"></div>
+          </div>
+          <div class="player-time" id="timeLabel">0:00 / 0:00</div>
+        </div>
+        <div class="player-row">
+          <div class="player-left">
+            <button class="player-btn" id="playPauseBtn" onclick="togglePlay()">
+              <svg id="playIcon" viewBox="0 0 24 24" width="18" height="18"><path d="M5 3l14 9-14 9V3z" fill="currentColor"/></svg>
+            </button>
+            <div class="player-vol-wrap">
+              <button class="player-btn" onclick="toggleMute()" id="muteBtn">
+                <svg id="volIcon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+                  <path d="M15.54 8.46a5 5 0 010 7.07"/>
+                </svg>
+              </button>
+              <input type="range" class="player-vol-slider" id="volSlider" min="0" max="1" step="0.02" value="1" oninput="setVolume(this.value)">
+            </div>
+          </div>
+          <div class="player-right">
+            <button class="player-btn" id="changeVideoBtn" onclick="document.getElementById('fileInputReplace').click()" style="display:none" title="Change video">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            </button>
+            <input type="file" id="fileInputReplace" accept="video/*" style="display:none" onchange="selectVideo(this)">
+            <button class="player-btn" id="queueBtn" onclick="toggleQueue()" style="display:none;position:relative" title="Queue">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+              <div class="queue-btn-badge" id="queueBadge"></div>
+            </button>
+            <button class="player-btn" id="fpsBtn" onclick="toggleFpsOverlay()" title="FPS counter" style="font-family:monospace;font-size:.6rem;font-weight:600;letter-spacing:-.5px;">
+              FPS
+            </button>
+            <button class="player-btn" onclick="toggleFullscreen()" id="fsBtn">
+              <svg id="fsIcon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 3H5a2 2 0 00-2 2v3m18 0V5a2 2 0 00-2-2h-3m0 18h3a2 2 0 002-2v-3M3 16v3a2 2 0 002 2h3"/></svg>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sidebar">
+      <div class="sidebar-header">
+        <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+        <span id="chatLabel">Chat</span>
+      </div>
+      <div class="messages" id="messages"></div>
+      <div class="chat-input-wrap">
+        <input type="text" class="chat-input" id="chatInput" maxlength="300" onkeydown="if(event.key==='Enter')sendChat()">
+        <button class="send-btn" onclick="sendChat()">
+          <svg viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22,2 15,22 11,13 2,9"/></svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="fs-chat" id="fsChat">
+    <div class="sidebar-header">
+      <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+      <span id="fsChatLabel">Chat</span>
+    </div>
+    <div class="messages" id="fsChatMessages"></div>
+    <div class="chat-input-wrap">
+      <input type="text" class="chat-input" id="fsChatInput" placeholder="Message…" maxlength="300" onkeydown="if(event.key==='Enter')sendFsChat()">
+      <button class="send-btn" onclick="sendFsChat()">
+        <svg viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22,2 15,22 11,13 2,9"/></svg>
+      </button>
+    </div>
+  </div>
+
+  </div>
+
+<div class="queue-popup" id="queuePopup">
+  <div class="queue-header">
+    <div class="queue-title">
+      <svg viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+      Queue
+      <span class="queue-count" id="queueCount">0</span>
+    </div>
+    <button class="queue-close" onclick="toggleQueue()">✕</button>
+  </div>
+  <div class="queue-add-row">
+    <button class="queue-add-btn" onclick="document.getElementById('fileInputQueue').click()">
+      <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      Add video
+    </button>
+    <input type="file" id="fileInputQueue" accept="video/*" multiple style="display:none" onchange="addToQueue(this)">
+  </div>
+  <div class="queue-list" id="queueList">
+    <div class="queue-empty" id="queueEmpty">Queue is empty — add videos above</div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="shareModal" onclick="if(event.target===this)closeShare()">
+  <div class="modal">
+    <div class="modal-title" id="modalTitle">Invite friends</div>
+    <div class="modal-sub" id="modalSub">// share the link or room code</div>
+    <div class="copy-row">
+      <input type="text" class="copy-input" id="shareLink" readonly>
+      <button class="copy-btn" id="copyBtn" onclick="copyLink()"><span id="copyBtnLabel">Copy</span></button>
+    </div>
+    <div class="or-divider" id="orCode">or room code</div>
+    <div class="room-code-big" id="shareCode">------</div>
+    <button class="modal-close" id="modalClose" onclick="closeShare()"><span id="modalCloseText">Close</span></button>
+  </div>
+</div>
+
+<script>
+// ── TRANSLATIONS ──
+const T = {
+  en: {
+    tabHost:'Host', tabJoin:'Join',
+    labelNameHost:'Your name', labelNameJoin:'Your name', labelCode:'Room code',
+    hostNamePh:'Your name…', joinNamePh:'Your name…', codePh:'XXXXXX',
+    btnCreate:'Create room', btnJoin:'Enter room',
+    uploadTitle:'Select video',
+    chatLabel:'Chat', chatPh:'Write a message…',
+    modalTitle:'Invite friends', modalSub:'// share the link or room code',
+    orCode:'or room code', copyBtn:'Copy', copyDone:'✓ Copied', modalClose:'Close',
+    homeTitle:'Home', inviteTitle:'Invite',
+    authSignIn:'Sign in', authRegister:'Register',
+    addFriend:'Add by username…', fpAdd:'Add',
+    fpTitle:'Friends', fpRequestsLabel:'Requests', fpFriendsLabel:'Friends',
+    waitingHost:'Waiting for host video…', waitRecv:'Receiving video…',
+    joined:(n,h)=>`${n} joined${h?' (host)':''}`,
+    videoSelected:'Video uploaded — streaming to friends',
+    hostLeft:'Host left the room', disconnected:'Connection lost',
+    videoReceived:'Video ready — syncing with host',
+    authLogout:'Sign out',
+    noFriends:'No friends yet.\nAdd someone by username above.',
+    syncingMsg:'Syncing playback…',
+    panelRegister:'Create account', panelGuest:'Guest mode',
+    goRegister:'Create account', goGuest:'Continue as guest',
+    backLogin:'Already have account? Sign in', backLogin2:'Sign in',
+    verifyBanner:'Confirm your email', resend:'Resend',
+  },
+  ru: {
+    tabHost:'Хост', tabJoin:'Войти',
+    labelNameHost:'Твоё имя', labelNameJoin:'Твоё имя', labelCode:'Код комнаты',
+    hostNamePh:'Имя…', joinNamePh:'Имя…', codePh:'XXXXXX',
+    btnCreate:'Создать комнату', btnJoin:'Войти',
+    uploadTitle:'Выбрать видео',
+    chatLabel:'Чат', chatPh:'Написать…',
+    modalTitle:'Пригласить друзей', modalSub:'// поделись ссылкой или кодом',
+    orCode:'или код комнаты', copyBtn:'Копировать', copyDone:'✓ Скопировано', modalClose:'Закрыть',
+    homeTitle:'Главная', inviteTitle:'Пригласить',
+    authSignIn:'Войти', authRegister:'Зарегистрироваться',
+    addFriend:'Добавить по нику…', fpAdd:'Добавить',
+    fpTitle:'Друзья', fpRequestsLabel:'Заявки', fpFriendsLabel:'Друзья',
+    waitingHost:'Ожидание видео от хоста…', waitRecv:'Получение видео…',
+    joined:(n,h)=>`${n} вошёл${h?' (хост)':''}`,
+    videoSelected:'Видео загружено — передаётся друзьям',
+    hostLeft:'Хост покинул комнату', disconnected:'Соединение прервано',
+    videoReceived:'Видео готово — синхронизация с хостом',
+    authLogout:'Выйти',
+    noFriends:'Друзей пока нет.\nДобавь по нику выше.',
+    syncingMsg:'Синхронизация…',
+    panelRegister:'Создать аккаунт', panelGuest:'Режим гостя',
+    goRegister:'Создать аккаунт', goGuest:'Продолжить как гость',
+    backLogin:'Уже есть аккаунт? Войти', backLogin2:'Войти',
+    verifyBanner:'Подтвердите email', resend:'Отправить снова',
+  },
+  uk: {
+    tabHost:'Хост', tabJoin:'Увійти',
+    labelNameHost:"Твоє ім'я", labelNameJoin:"Твоє ім'я", labelCode:'Код кімнати',
+    hostNamePh:"Ім'я…", joinNamePh:"Ім'я…", codePh:'XXXXXX',
+    btnCreate:'Створити кімнату', btnJoin:'Увійти',
+    uploadTitle:'Вибрати відео',
+    chatLabel:'Чат', chatPh:'Написати…',
+    modalTitle:'Запросити друзів', modalSub:'// поділись посиланням або кодом',
+    orCode:'або код кімнати', copyBtn:'Копіювати', copyDone:'✓ Скопійовано', modalClose:'Закрити',
+    homeTitle:'Головна', inviteTitle:'Запросити',
+    authSignIn:'Увійти', authRegister:'Зареєструватись',
+    addFriend:'Додати за ніком…', fpAdd:'Додати',
+    fpTitle:'Друзі', fpRequestsLabel:'Запити', fpFriendsLabel:'Друзі',
+    waitingHost:'Очікування відео від хоста…', waitRecv:'Отримання відео…',
+    joined:(n,h)=>`${n} увійшов${h?' (хост)':''}`,
+    videoSelected:'Відео завантажено — передається друзям',
+    hostLeft:'Хост покинув кімнату', disconnected:"З'єднання перервано",
+    videoReceived:'Відео готово — синхронізація з хостом',
+    authLogout:'Вийти',
+    noFriends:"Друзів ще немає.\nДодай за ніком вище.",
+    syncingMsg:'Синхронізація…',
+    panelRegister:'Створити акаунт', panelGuest:'Режим гостя',
+    goRegister:'Створити акаунт', goGuest:'Продовжити як гість',
+    backLogin:'Вже є акаунт? Увійти', backLogin2:'Увійти',
+    verifyBanner:'Підтвердіть email', resend:'Надіслати знову',
+  },
+  ja: {
+    tabHost:'ホスト', tabJoin:'参加する',
+    labelNameHost:'お名前', labelNameJoin:'お名前', labelCode:'部屋コード',
+    hostNamePh:'名前を入力…', joinNamePh:'名前を入力…', codePh:'XXXXXX',
+    btnCreate:'部屋を作る', btnJoin:'入室する',
+    uploadTitle:'動画を選択する',
+    chatLabel:'チャット', chatPh:'メッセージを入力…',
+    modalTitle:'友達を招待する', modalSub:'// リンクまたはコードを共有',
+    orCode:'または部屋コード', copyBtn:'コピー', copyDone:'✓ コピー済', modalClose:'閉じる',
+    homeTitle:'ホーム', inviteTitle:'招待',
+    authSignIn:'ログイン', authRegister:'登録',
+    addFriend:'ユーザー名で追加…', fpAdd:'追加',
+    fpTitle:'フレンド', fpRequestsLabel:'リクエスト', fpFriendsLabel:'フレンド',
+    waitingHost:'ホストの動画を待っています…', waitRecv:'動画を受信中…',
+    joined:(n,h)=>`${n} として入室${h?' (ホスト)':''}`,
+    videoSelected:'動画をアップロードしました — 送信中',
+    hostLeft:'ホストが退室しました', disconnected:'接続が切断されました',
+    videoReceived:'動画の準備ができました — 同期中',
+    authLogout:'ログアウト',
+    noFriends:'まだフレンドがいません。\n上でユーザー名を追加してください。',
+    syncingMsg:'同期中…',
+    panelRegister:'アカウント作成', panelGuest:'ゲストモード',
+    goRegister:'アカウントを作成', goGuest:'ゲストとして続ける',
+    backLogin:'アカウントをお持ちですか？ ログイン', backLogin2:'ログイン',
+    verifyBanner:'メールを確認してください', resend:'再送信',
   }
-  _writeLocks[key] = true;
-  try { return await fn(); }
-  finally { delete _writeLocks[key]; }
+};
+
+let lang = 'en';
+function i(k,...a){ const v=T[lang][k]; return typeof v==='function'?v(...a):v||T.en[k]||k; }
+
+function setTheme(t){
+  document.documentElement.setAttribute('data-theme',t);
+  localStorage.setItem('wt-theme',t);
+  document.getElementById('themeLightBtn').classList.toggle('active',t==='light');
+  document.getElementById('themeDarkBtn').classList.toggle('active',t==='dark');
 }
 
-function loadUsers() {
-  if (_usersCache) return _usersCache;
-  try { _usersCache = JSON.parse(fs.readFileSync(USERS_FILE, 'utf8')); }
-  catch { _usersCache = {}; }
-  return _usersCache;
+function setLang(l){
+  lang=l;
+  document.querySelectorAll('.lang-btn').forEach((b,idx)=>b.classList.toggle('active',['en','ru','uk','ja'][idx]===l));
+  const t=T[l];
+  const s=(id,v)=>{ const el=document.getElementById(id); if(el) el.textContent=v; };
+  const p=(id,v)=>{ const el=document.getElementById(id); if(el) el.placeholder=v; };
+  s('tabHost',t.tabHost); s('tabJoin',t.tabJoin);
+  s('labelNameHost',t.labelNameHost); s('labelNameJoin',t.labelNameJoin); s('labelCode',t.labelCode);
+  p('hostName',t.hostNamePh); p('joinName',t.joinNamePh); p('joinCode',t.codePh);
+  s('btnCreateText',t.btnCreate); s('btnJoinText',t.btnJoin);
+  s('uploadTitle',t.uploadTitle);
+  s('chatLabel',t.chatLabel); s('fsChatLabel',t.chatLabel);
+  p('chatInput',t.chatPh);
+  s('modalTitle',t.modalTitle); s('modalSub',t.modalSub);
+  s('orCode',t.orCode); s('copyBtnLabel',t.copyBtn); s('modalCloseText',t.modalClose);
+  s('waitingText',t.waitingHost);
+  p('addFriendInput',t.addFriend); s('fpAddBtn',t.fpAdd);
+  s('fpTitle',t.fpTitle); s('fpRequestsLabel',t.fpRequestsLabel); s('fpFriendsLabel',t.fpFriendsLabel);
+  s('authLoginText',t.authSignIn); s('authRegisterText',t.authRegister);
+  s('authLogoutBtn',t.authLogout);
+  // Панели
+  s('panelRegisterTitle',t.panelRegister||'Create account');
+  s('panelGuestTitle',t.panelGuest||'Guest mode');
+  s('btnGoRegister',t.goRegister||'Create account');
+  s('btnGoRegister2',t.goRegister||'Create account');
+  s('btnGoGuest',t.goGuest||'Continue as guest');
+  s('btnGoGuest2',t.goGuest||'Continue as guest');
+  s('btnBackToLogin',t.backLogin||'Already have account? Sign in');
+  s('btnBackToLogin2',t.backLogin2||'Sign in');
+  s('verifyBannerText',t.verifyBanner||'Confirm your email'); s('resendBtn',t.resend||'Resend');
 }
 
-async function saveUsers(u) {
-  return withLock('users', () => {
-    _usersCache = u;
-    const tmp = USERS_FILE + '.tmp';
-    fs.writeFileSync(tmp, JSON.stringify(u, null, 2));
-    fs.renameSync(tmp, USERS_FILE);
-  });
-}
-
-function loadSessions() {
-  if (_sessionsCache) return _sessionsCache;
-  try { _sessionsCache = JSON.parse(fs.readFileSync(SESSIONS_FILE, 'utf8')); }
-  catch { _sessionsCache = {}; }
-  return _sessionsCache;
-}
-
-async function saveSessions(s) {
-  return withLock('sessions', () => {
-    _sessionsCache = s;
-    const tmp = SESSIONS_FILE + '.tmp';
-    fs.writeFileSync(tmp, JSON.stringify(s, null, 2));
-    fs.renameSync(tmp, SESSIONS_FILE);
-  });
-}
-
-// ── PASSWORD HASHING (PBKDF2) ──
-function hashPassword(password, salt) {
-  if (!salt) salt = crypto.randomBytes(16).toString('hex');
-  const hash = crypto.pbkdf2Sync(password, salt, 100000, 64, 'sha512').toString('hex');
-  return { hash, salt };
-}
-
-function verifyPassword(password, storedHash, salt) {
-  const { hash } = hashPassword(password, salt);
-  return crypto.timingSafeEqual(Buffer.from(hash), Buffer.from(storedHash));
-}
-
-function genToken() { return crypto.randomBytes(32).toString('hex'); }
-
-// ── SESSION MANAGEMENT ──
-async function createSession(username) {
-  const sessions = loadSessions();
-  const token = genToken();
-  sessions[token] = { username, createdAt: Date.now(), lastUsed: Date.now() };
-  await saveSessions(sessions);
-  return token;
-}
-
-function getSession(token) {
-  if (!token) return null;
-  const sessions = loadSessions();
-  const session = sessions[token];
-  if (!session) return null;
-  session.lastUsed = Date.now();
-  // fire-and-forget async save для lastUsed (некритично)
-  saveSessions(sessions).catch(() => {});
-  return session.username;
-}
-
-async function deleteSession(token) {
-  const sessions = loadSessions();
-  delete sessions[token];
-  await saveSessions(sessions);
-}
-
-function cleanOldSessions() {
-  const sessions = loadSessions();
-  const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
-  let changed = false;
-  for (const [token, session] of Object.entries(sessions)) {
-    if (session.lastUsed < cutoff) { delete sessions[token]; changed = true; }
-  }
-  if (changed) saveSessions(sessions).catch(() => {});
-}
-setInterval(cleanOldSessions, 60 * 60 * 1000);
-
-// FIX [CRIT-4]: Rate limiting для auth endpoints
-const _loginAttempts = new Map(); // ip -> { count, resetAt }
-
-function checkRateLimit(ip) {
-  const now = Date.now();
-  const entry = _loginAttempts.get(ip);
-  if (!entry || entry.resetAt < now) {
-    _loginAttempts.set(ip, { count: 1, resetAt: now + 15 * 60 * 1000 });
-    return true;
-  }
-  if (entry.count >= 10) return false;
-  entry.count++;
-  return true;
-}
-
-function resetRateLimit(ip) {
-  _loginAttempts.delete(ip);
-}
-
-// Очистка старых записей rate limit каждые 30 минут
-setInterval(() => {
-  const now = Date.now();
-  for (const [ip, entry] of _loginAttempts.entries()) {
-    if (entry.resetAt < now) _loginAttempts.delete(ip);
-  }
-}, 30 * 60 * 1000);
-
-// ── ONLINE USERS & WS MAPS ──
-const onlineUsers = new Map(); // username → Set<ws>
-const wsUserMap = new Map();   // ws → username
-
-function broadcastFriendStatus(username, online) {
-  const users = loadUsers();
-  const user = users[username];
-  if (!user) return;
-  (user.friends || []).forEach(friendName => {
-    const fws = onlineUsers.get(friendName);
-    if (fws) fws.forEach(ws => {
-      if (ws.readyState === 1) ws.send(JSON.stringify({ type: 'friend_status', username, online }));
-    });
-  });
-}
-
-function broadcastFriendRequest(toUsername, fromUsername) {
-  const fws = onlineUsers.get(toUsername);
-  if (fws) fws.forEach(ws => {
-    if (ws.readyState === 1) ws.send(JSON.stringify({ type: 'friend_request', from: fromUsername }));
-  });
-}
-
-// ── EMAIL (Nodemailer + Gmail SMTP) ──
-// Установи: npm install nodemailer
-const nodemailer = require('nodemailer');
-
-const GMAIL_USER = process.env.GMAIL_USER || null;       // твой gmail: example@gmail.com
-const GMAIL_PASS = process.env.GMAIL_PASS || null;       // App Password (не обычный пароль!)
-const EMAIL_FROM_NAME = process.env.EMAIL_FROM_NAME || 'Watch Together';
-const APP_URL = process.env.SELF_URL || process.env.RAILWAY_STATIC_URL || 'http://localhost:3000';
-
-let _transporter = null;
-function getTransporter() {
-  if (_transporter) return _transporter;
-  if (!GMAIL_USER || !GMAIL_PASS) return null;
-  _transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: { user: GMAIL_USER, pass: GMAIL_PASS }
-  });
-  return _transporter;
-}
-
-async function sendEmail(to, subject, html) {
-  const transport = getTransporter();
-  if (!transport) {
-    console.log(`[email] GMAIL_USER/GMAIL_PASS не заданы — письмо не отправлено\nTo: ${to}\nSubject: ${subject}`);
-    return false;
-  }
-  try {
-    await transport.sendMail({
-      from: `"${EMAIL_FROM_NAME}" <${GMAIL_USER}>`,
-      to,
-      subject,
-      html
-    });
-    console.log(`[email] sent to ${to}`);
-    return true;
-  } catch (e) {
-    console.error('[email] Gmail error:', e.message);
-    return false;
-  }
-}
-
-function emailVerifyHtml(username, link) {
-  return `<!DOCTYPE html><html><body style="font-family:sans-serif;background:#f5eee8;padding:40px 0">
-  <div style="max-width:480px;margin:0 auto;background:#fff;border-radius:16px;padding:40px;box-shadow:0 4px 24px rgba(0,0,0,0.07)">
-    <h2 style="color:#5a3530;margin:0 0 8px">Watch Together</h2>
-    <p style="color:#888;font-size:14px;margin:0 0 28px">Подтверждение email</p>
-    <p style="color:#3a2e28">Привет, <b>${username}</b>!</p>
-    <p style="color:#3a2e28">Нажми кнопку ниже чтобы подтвердить свой email:</p>
-    <a href="${link}" style="display:inline-block;margin:20px 0;padding:14px 32px;background:#c07060;color:#fff;border-radius:10px;text-decoration:none;font-size:15px">Подтвердить email</a>
-    <p style="color:#aaa;font-size:12px">Ссылка действительна 24 часа.<br>Если ты не регистрировался — просто игнорируй это письмо.</p>
-  </div></body></html>`;
-}
-
-function emailResetHtml(username, link) {
-  return `<!DOCTYPE html><html><body style="font-family:sans-serif;background:#f5eee8;padding:40px 0">
-  <div style="max-width:480px;margin:0 auto;background:#fff;border-radius:16px;padding:40px;box-shadow:0 4px 24px rgba(0,0,0,0.07)">
-    <h2 style="color:#5a3530;margin:0 0 8px">Watch Together</h2>
-    <p style="color:#888;font-size:14px;margin:0 0 28px">Сброс пароля</p>
-    <p style="color:#3a2e28">Привет, <b>${username}</b>!</p>
-    <p style="color:#3a2e28">Ты запросил сброс пароля. Нажми кнопку ниже:</p>
-    <a href="${link}" style="display:inline-block;margin:20px 0;padding:14px 32px;background:#c07060;color:#fff;border-radius:10px;text-decoration:none;font-size:15px">Сбросить пароль</a>
-    <p style="color:#aaa;font-size:12px">Ссылка действительна 1 час.<br>Если ты не запрашивал сброс — просто игнорируй это письмо.</p>
-  </div></body></html>`;
-}
-
-// Хранилище токенов верификации и сброса (in-memory, с TTL)
-const _verifyTokens = new Map(); // token -> { username, expiresAt }
-const _resetTokens  = new Map(); // token -> { username, expiresAt }
-
-// Чистка просроченных токенов каждый час
-setInterval(() => {
-  const now = Date.now();
-  for (const [k, v] of _verifyTokens) if (v.expiresAt < now) _verifyTokens.delete(k);
-  for (const [k, v] of _resetTokens)  if (v.expiresAt < now) _resetTokens.delete(k);
-}, 60 * 60 * 1000);
-
-// ── AUTH ROUTES ──
-app.post('/api/register', async (req, res) => {
-  const ip = req.ip || req.connection.remoteAddress || 'unknown';
-  if (!checkRateLimit('reg_' + ip)) {
-    return res.status(429).json({ error: 'Too many attempts, try later' });
-  }
-
-  const { username, password, avatar, email } = req.body;
-  if (!username || !password) return res.status(400).json({ error: 'Missing fields' });
-  if (username.length < 2 || username.length > 24) return res.status(400).json({ error: 'Username 2-24 chars' });
-  if (!/^[a-zA-Z0-9_\u0400-\u04FF]+$/.test(username)) return res.status(400).json({ error: 'Letters, numbers, _ only' });
-  if (password.length < 6) return res.status(400).json({ error: 'Password min 6 chars' });
-
-  // Валидация email если указан
-  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    return res.status(400).json({ error: 'Invalid email' });
-  }
-
-  const users = loadUsers();
-  if (users[username]) return res.status(409).json({ error: 'Username taken' });
-
-  // Проверка уникальности email
-  if (email) {
-    const emailTaken = Object.values(users).some(u => u.email === email.toLowerCase());
-    if (emailTaken) return res.status(409).json({ error: 'Email already registered' });
-  }
-
-  const { hash, salt } = hashPassword(password);
-  users[username] = {
-    password: hash,
-    salt,
-    avatar: avatar || '🌸',
-    email: email ? email.toLowerCase() : null,
-    emailVerified: false,
-    friends: [],
-    friendRequests: [],
-    createdAt: Date.now()
-  };
-  await saveUsers(users);
-
-  // Отправляем письмо верификации если email указан
-  if (email) {
-    const vToken = crypto.randomBytes(32).toString('hex');
-    _verifyTokens.set(vToken, { username, expiresAt: Date.now() + 24 * 60 * 60 * 1000 });
-    const link = `${APP_URL}/api/verify-email?token=${vToken}`;
-    sendEmail(email, 'Подтверди свой email — Watch Together', emailVerifyHtml(username, link));
-  }
-
-  const token = await createSession(username);
-  res.json({
-    token,
-    username,
-    avatar: users[username].avatar,
-    emailVerified: false,
-    message: email ? 'Письмо с подтверждением отправлено на ' + email : null
-  });
-});
-
-app.post('/api/login', async (req, res) => {
-  const ip = req.ip || req.connection.remoteAddress || 'unknown';
-  // FIX [CRIT-4]: Rate limit на логин
-  if (!checkRateLimit('login_' + ip)) {
-    return res.status(429).json({ error: 'Too many attempts, try in 15 minutes' });
-  }
-
-  const { username, password } = req.body;
-  const users = loadUsers();
-  const user = users[username];
-
-  // FIX [CRIT-4]: Искусственная задержка при неудаче — усложняет brute force
-  if (!user) {
-    await new Promise(r => setTimeout(r, 400));
-    return res.status(401).json({ error: 'Invalid credentials' });
-  }
-
-  let valid = false;
-  if (user.salt) {
-    valid = verifyPassword(password, user.password, user.salt);
-  } else {
-    const oldHash = crypto.createHash('sha256').update(password + 'wt_salt_2026').digest('hex');
-    valid = user.password === oldHash;
-    if (valid) {
-      const { hash, salt } = hashPassword(password);
-      user.password = hash;
-      user.salt = salt;
-      await saveUsers(users);
-    }
-  }
-
-  if (!valid) {
-    await new Promise(r => setTimeout(r, 400));
-    return res.status(401).json({ error: 'Invalid credentials' });
-  }
-
-  resetRateLimit('login_' + ip);
-  const token = await createSession(username);
-  res.json({ token, username, avatar: user.avatar, friends: user.friends, friendRequests: user.friendRequests });
-});
-
-app.post('/api/logout', async (req, res) => {
-  const token = req.headers.authorization?.replace('Bearer ', '');
-  if (token) await deleteSession(token);
-  res.json({ ok: true });
-});
-
-// ── EMAIL VERIFICATION ──
-
-// GET /api/verify-email?token=xxx — переход по ссылке из письма
-app.get('/api/verify-email', async (req, res) => {
-  const { token } = req.query;
-  const entry = _verifyTokens.get(token);
-  if (!entry || entry.expiresAt < Date.now()) {
-    return res.status(400).send(`<!DOCTYPE html><html><body style="font-family:sans-serif;text-align:center;padding:60px;background:#f5eee8">
-      <h2 style="color:#c07060">Ссылка недействительна</h2>
-      <p>Ссылка устарела или уже использована.</p>
-      <a href="${APP_URL}" style="color:#c07060">Вернуться на сайт</a>
-    </body></html>`);
-  }
-  const users = loadUsers();
-  if (users[entry.username]) {
-    users[entry.username].emailVerified = true;
-    await saveUsers(users);
-  }
-  _verifyTokens.delete(token);
-  res.send(`<!DOCTYPE html><html><body style="font-family:sans-serif;text-align:center;padding:60px;background:#f5eee8">
-    <h2 style="color:#5a3530">Email подтверждён ✓</h2>
-    <p>Теперь ты можешь войти в Watch Together.</p>
-    <a href="${APP_URL}" style="display:inline-block;margin-top:20px;padding:12px 28px;background:#c07060;color:#fff;border-radius:10px;text-decoration:none">Перейти на сайт</a>
-  </body></html>`);
-});
-
-// POST /api/resend-verification — повторная отправка письма
-app.post('/api/resend-verification', async (req, res) => {
-  const token = req.headers.authorization?.replace('Bearer ', '');
-  const username = getSession(token);
-  if (!username) return res.status(401).json({ error: 'Unauthorized' });
-
-  const users = loadUsers();
-  const user = users[username];
-  if (!user?.email) return res.status(400).json({ error: 'No email set' });
-  if (user.emailVerified) return res.status(400).json({ error: 'Already verified' });
-
-  const vToken = crypto.randomBytes(32).toString('hex');
-  _verifyTokens.set(vToken, { username, expiresAt: Date.now() + 24 * 60 * 60 * 1000 });
-  const link = `${APP_URL}/api/verify-email?token=${vToken}`;
-  await sendEmail(user.email, 'Подтверди свой email — Watch Together', emailVerifyHtml(username, link));
-  res.json({ ok: true });
-});
-
-// ── PASSWORD RESET ──
-
-// POST /api/forgot-password — запрос сброса
-app.post('/api/forgot-password', async (req, res) => {
-  const ip = req.ip || req.connection.remoteAddress || 'unknown';
-  if (!checkRateLimit('reset_' + ip)) {
-    return res.status(429).json({ error: 'Too many attempts, try later' });
-  }
-
-  const { email } = req.body;
-  if (!email) return res.status(400).json({ error: 'Email required' });
-
-  // Всегда отвечаем OK чтобы не раскрывать существование аккаунта
-  const users = loadUsers();
-  const entry = Object.entries(users).find(([, u]) => u.email === email.toLowerCase());
-  if (entry) {
-    const [username] = entry;
-    const rToken = crypto.randomBytes(32).toString('hex');
-    _resetTokens.set(rToken, { username, expiresAt: Date.now() + 60 * 60 * 1000 });
-    const link = `${APP_URL}?reset=${rToken}`;
-    sendEmail(email.toLowerCase(), 'Сброс пароля — Watch Together', emailResetHtml(username, link));
-  }
-  res.json({ ok: true, message: 'Если аккаунт с таким email существует — письмо отправлено' });
-});
-
-// POST /api/reset-password — установка нового пароля
-app.post('/api/reset-password', async (req, res) => {
-  const { token, password } = req.body;
-  if (!token || !password) return res.status(400).json({ error: 'Missing fields' });
-  if (password.length < 6) return res.status(400).json({ error: 'Password min 6 chars' });
-
-  const entry = _resetTokens.get(token);
-  if (!entry || entry.expiresAt < Date.now()) {
-    return res.status(400).json({ error: 'Link expired or invalid' });
-  }
-
-  const users = loadUsers();
-  if (!users[entry.username]) return res.status(404).json({ error: 'User not found' });
-
-  const { hash, salt } = hashPassword(password);
-  users[entry.username].password = hash;
-  users[entry.username].salt = salt;
-  await saveUsers(users);
-  _resetTokens.delete(token);
-
-  // Удаляем все сессии пользователя для безопасности
-  const sessions = loadSessions();
-  for (const [t, s] of Object.entries(sessions)) {
-    if (s.username === entry.username) delete sessions[t];
-  }
-  await saveSessions(sessions);
-
-  res.json({ ok: true });
-});
-
-app.get('/api/me', (req, res) => {
-  const token = req.headers.authorization?.replace('Bearer ', '');
-  const username = getSession(token);
-  if (!username) return res.status(401).json({ error: 'Unauthorized' });
-
-  const users = loadUsers();
-  const user = users[username];
-  if (!user) return res.status(404).json({ error: 'User not found' });
-
-  const friendsList = (user.friends || []).map(f => ({
-    username: f,
-    avatar: users[f]?.avatar || '🌸',
-    online: onlineUsers.has(f) && onlineUsers.get(f).size > 0
-  }));
-
-  res.json({
-    username,
-    avatar: user.avatar,
-    email: user.email || null,
-    emailVerified: user.emailVerified || false,
-    friends: friendsList,
-    friendRequests: user.friendRequests || []
-  });
-});
-
-// ── FRIENDS ──
-app.post('/api/friends/request', async (req, res) => {
-  const token = req.headers.authorization?.replace('Bearer ', '');
-  const fromUsername = getSession(token);
-  if (!fromUsername) return res.status(401).json({ error: 'Unauthorized' });
-
-  const { username: toUsername } = req.body;
-  const users = loadUsers();
-  if (!users[toUsername]) return res.status(404).json({ error: 'User not found' });
-  if (fromUsername === toUsername) return res.status(400).json({ error: 'Cannot add yourself' });
-
-  const toUser = users[toUsername];
-  if ((toUser.friends || []).includes(fromUsername)) return res.status(400).json({ error: 'Already friends' });
-  if ((toUser.friendRequests || []).includes(fromUsername)) return res.status(400).json({ error: 'Request already sent' });
-
-  toUser.friendRequests = [...(toUser.friendRequests || []), fromUsername];
-  await saveUsers(users);
-  broadcastFriendRequest(toUsername, fromUsername);
-  res.json({ ok: true });
-});
-
-app.post('/api/friends/accept', async (req, res) => {
-  const token = req.headers.authorization?.replace('Bearer ', '');
-  const username = getSession(token);
-  if (!username) return res.status(401).json({ error: 'Unauthorized' });
-
-  const { username: fromUsername } = req.body;
-  const users = loadUsers();
-  users[username].friendRequests = (users[username].friendRequests || []).filter(r => r !== fromUsername);
-  users[username].friends = [...new Set([...(users[username].friends || []), fromUsername])];
-  if (users[fromUsername]) users[fromUsername].friends = [...new Set([...(users[fromUsername].friends || []), username])];
-  await saveUsers(users);
-  broadcastFriendStatus(username, true);
-  broadcastFriendStatus(fromUsername, true);
-  res.json({ ok: true });
-});
-
-app.post('/api/friends/decline', async (req, res) => {
-  const token = req.headers.authorization?.replace('Bearer ', '');
-  const username = getSession(token);
-  if (!username) return res.status(401).json({ error: 'Unauthorized' });
-
-  const { username: fromUsername } = req.body;
-  const users = loadUsers();
-  users[username].friendRequests = (users[username].friendRequests || []).filter(r => r !== fromUsername);
-  await saveUsers(users);
-  res.json({ ok: true });
-});
-
-app.delete('/api/friends/:friendName', async (req, res) => {
-  const token = req.headers.authorization?.replace('Bearer ', '');
-  const username = getSession(token);
-  if (!username) return res.status(401).json({ error: 'Unauthorized' });
-
-  const { friendName } = req.params;
-  const users = loadUsers();
-  users[username].friends = (users[username].friends || []).filter(f => f !== friendName);
-  if (users[friendName]) users[friendName].friends = (users[friendName].friends || []).filter(f => f !== username);
-  await saveUsers(users);
-  res.json({ ok: true });
-});
-
-// ── ROOMS ──
-const rooms = {};
-
-function getRoom(id) {
-  if (!rooms[id]) rooms[id] = {
-    host: null,
-    hostToken: null, // FIX [HIGH-2]: храним токен создателя комнаты
-    clients: new Map(),
-    state: { playing: false, time: 0, updatedAt: Date.now() },
-    hasVideo: false,
-    videoFile: null,
-    videoOrigName: null,
-    createdAt: Date.now(),
-    lastActivity: Date.now() // FIX [HIGH-1]: для TTL очистки
-  };
-  return rooms[id];
-}
-
-function broadcast(roomId, data, exceptWs = null) {
-  const room = rooms[roomId];
-  if (!room) return;
-  const msg = JSON.stringify(data);
-  if (room.host && room.host !== exceptWs && room.host.readyState === 1) room.host.send(msg);
-  room.clients.forEach(client => { if (client !== exceptWs && client.readyState === 1) client.send(msg); });
-}
-
-function sendTo(ws, data) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(data)); }
-function getViewerCount(room) { return room.clients.size + (room.host ? 1 : 0); }
-
-// FIX [HIGH-1]: TTL-очистка комнат — удаляем неактивные комнаты через 2 часа
-function cleanOldRooms() {
-  const cutoff = Date.now() - 2 * 60 * 60 * 1000;
-  for (const [roomId, room] of Object.entries(rooms)) {
-    if (room.lastActivity < cutoff) {
-      deleteRoomVideo(room);
-      delete rooms[roomId];
-      console.log(`Cleaned up inactive room: ${roomId}`);
-    }
-  }
-}
-setInterval(cleanOldRooms, 30 * 60 * 1000);
-
-// ── VIDEO CLEANUP ──
-function getFilesInUse() {
-  const used = new Set();
-  for (const room of Object.values(rooms)) {
-    if (room.videoFile) used.add(room.videoFile);
-  }
-  return used;
-}
-
-function cleanupOldVideos() {
-  if (!fs.existsSync(UPLOAD_DIR)) return;
-  const files = fs.readdirSync(UPLOAD_DIR);
-  const inUse = getFilesInUse();
-  const cutoff = Date.now() - 2 * 60 * 60 * 1000;
-
-  files.forEach(file => {
-    if (inUse.has(file)) return;
-    const filePath = path.join(UPLOAD_DIR, file);
+// ── STATE ──
+let ws, roomId, myName, myClientId, isHost=false, isSyncing=false;
+let authToken=null, authUser=null, authAvatar=null;
+let friendsPanelOpen=false;
+let _networkLatency=0;
+// FIX [HIGH-5]: флаг намеренного отключения
+let _intentionalDisconnect=false;
+
+function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function ft(s){ s=Math.floor(s||0); return `${Math.floor(s/60)}:${(s%60).toString().padStart(2,'0')}`; }
+function rid(n=6){ return Math.random().toString(36).substr(2,n).toUpperCase(); }
+
+// ── AUTH PERSISTENCE ──
+(function loadAuth(){
+  const saved = localStorage.getItem('wt-auth');
+  if(saved){
     try {
-      const stat = fs.statSync(filePath);
-      if (stat.mtimeMs < cutoff) {
-        fs.unlinkSync(filePath);
-        console.log(`Cleaned up old video: ${file}`);
-      }
+      const d = JSON.parse(saved);
+      authToken = d.token; authUser = d.username; authAvatar = d.avatar;
+      updateAuthUI();
     } catch {}
-  });
+  }
+})();
+
+function showPanel(id){
+  document.querySelectorAll('.lobby-panel').forEach(p=>p.classList.remove('active'));
+  const el=document.getElementById(id);
+  if(el) el.classList.add('active');
 }
 
-setInterval(cleanupOldVideos, 30 * 60 * 1000);
-
-function deleteRoomVideo(room) {
-  if (room.videoFile) {
-    // FIX [HIGH-3]: сохраняем имя файла в closure, проверяем перед удалением
-    const fileToDelete = room.videoFile;
-    const filePath = path.join(UPLOAD_DIR, fileToDelete);
-    setTimeout(() => {
-      const inUse = getFilesInUse();
-      if (!inUse.has(fileToDelete)) {
-        try { fs.unlinkSync(filePath); } catch {}
-      }
-    }, 30000);
-    room.videoFile = null;
-    room.hasVideo = false;
+function updateAuthUI(){
+  const userInfo=document.getElementById('authUserInfo');
+  const loginFields=document.getElementById('loginFormFields');
+  if(authUser){
+    if(userInfo){ userInfo.style.display='flex'; }
+    if(loginFields){ loginFields.style.display='none'; }
+    // Залогиненный пользователь — сразу на гостевую панель (с вкладками)
+    showPanel('panelGuest');
+    // Заполняем имя
+    const hn=document.getElementById('hostName');
+    const jn=document.getElementById('joinName');
+    if(hn&&!hn.value) hn.value=authUser;
+    if(jn&&!jn.value) jn.value=authUser;
+    document.getElementById('friendsBtn').style.display='flex';
+    document.getElementById('userChip').style.display='flex';
+    document.getElementById('userChipAvatar').textContent=authAvatar||'🌸';
+    document.getElementById('userChipName').textContent=authUser;
+  } else {
+    if(userInfo){ userInfo.style.display='none'; }
+    if(loginFields){ loginFields.style.display='block'; }
+    showPanel('panelLogin');
+    document.getElementById('friendsBtn').style.display='none';
+    document.getElementById('userChip').style.display='none';
   }
+}
+
+async function authLogin(){
+  const username=document.getElementById('authUsername').value.trim();
+  const password=document.getElementById('authPassword').value;
+  if(!username||!password) return setAuthStatus('Enter username and password');
+  setAuthStatus('…');
+  try {
+    const r=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,password})});
+    const d=await r.json();
+    if(r.status===429) return setAuthStatus('Too many attempts, try later');
+    if(!r.ok) return setAuthStatus(d.error||'Error');
+    authToken=d.token; authUser=d.username; authAvatar=d.avatar;
+    localStorage.setItem('wt-auth',JSON.stringify({token:d.token,username:d.username,avatar:d.avatar}));
+    setAuthStatus('');
+    updateAuthUI();
+    if(d.emailVerified===false && d.email) showVerifyBanner();
+  } catch { setAuthStatus('Network error'); }
+}
+
+let _resetToken = null;
+
+async function authRegister(){
+  const username=document.getElementById('regUsername').value.trim();
+  const password=document.getElementById('regPassword').value;
+  const email=document.getElementById('regEmail').value.trim()||undefined;
+  const st=document.getElementById('authRegisterStatus');
+  if(!username||!password){ st.textContent='Enter username and password'; return; }
+  if(password.length<6){ st.textContent='Password min 6 chars'; return; }
+  st.textContent='…';
+  try {
+    const r=await fetch('/api/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,password,email})});
+    const d=await r.json();
+    if(r.status===429){ st.textContent='Too many attempts, try later'; return; }
+    if(!r.ok){ st.textContent=d.error||'Error'; return; }
+    authToken=d.token; authUser=d.username; authAvatar=d.avatar;
+    localStorage.setItem('wt-auth',JSON.stringify({token:d.token,username:d.username,avatar:d.avatar}));
+    st.textContent='';
+    updateAuthUI();
+    if(email) showVerifyBanner();
+    if(d.message) setAuthStatus(d.message);
+  } catch { st.textContent='Network error'; }
+}
+
+function showVerifyBanner(){
+  const b=document.getElementById('verifyBanner');
+  if(b){ b.style.display='flex'; }
+}
+
+async function resendVerification(){
+  if(!authToken) return;
+  const btn=document.getElementById('resendBtn');
+  btn.textContent='Sending…'; btn.disabled=true;
+  try {
+    await fetch('/api/resend-verification',{method:'POST',headers:{Authorization:`Bearer ${authToken}`}});
+    btn.textContent='Sent ✓';
+    setTimeout(()=>{ btn.textContent='Resend'; btn.disabled=false; },30000);
+  } catch { btn.textContent='Error'; btn.disabled=false; }
+}
+
+function showForgotPassword(){
+  // Если в URL есть ?reset= — сразу показываем шаг 2
+  const params=new URLSearchParams(location.search);
+  const rt=params.get('reset');
+  if(rt){ _resetToken=rt; showResetStep2(); }
+  else { showResetStep1(); }
+  document.getElementById('forgotModal').classList.add('open');
+}
+
+function showResetStep1(){
+  document.getElementById('forgotStep1').style.display='block';
+  document.getElementById('forgotStep2').style.display='none';
+  document.getElementById('forgotStatus').textContent='';
+}
+
+function showResetStep2(){
+  document.getElementById('forgotStep1').style.display='none';
+  document.getElementById('forgotStep2').style.display='block';
+  document.getElementById('forgotStatus').textContent='';
+}
+
+function closeForgotModal(){
+  document.getElementById('forgotModal').classList.remove('open');
+  document.getElementById('forgotStatus').textContent='';
+}
+
+async function submitForgot(){
+  const email=document.getElementById('forgotEmail').value.trim();
+  if(!email) return document.getElementById('forgotStatus').textContent='Enter your email';
+  const btn=document.getElementById('forgotSubmitBtn');
+  btn.disabled=true;
+  document.getElementById('forgotSubmitText').textContent='Sending…';
+  try {
+    await fetch('/api/forgot-password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email})});
+    document.getElementById('forgotStatus').textContent='If this email exists — check your inbox';
+    document.getElementById('forgotStep1').style.display='none';
+  } catch {
+    document.getElementById('forgotStatus').textContent='Network error';
+    btn.disabled=false;
+    document.getElementById('forgotSubmitText').textContent='Send reset link';
+  }
+}
+
+async function submitReset(){
+  const password=document.getElementById('newPassword').value;
+  const confirm=document.getElementById('newPasswordConfirm').value;
+  const st=document.getElementById('forgotStatus');
+  if(password.length<6) return st.textContent='Password min 6 chars';
+  if(password!==confirm) return st.textContent='Passwords do not match';
+  if(!_resetToken) return st.textContent='Invalid token';
+  try {
+    const r=await fetch('/api/reset-password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:_resetToken,password})});
+    const d=await r.json();
+    if(!r.ok) return st.textContent=d.error||'Error';
+    st.textContent='Password changed! You can now sign in.';
+    document.getElementById('forgotStep2').style.display='none';
+    // Чистим URL
+    history.replaceState(null,'',location.pathname);
+    _resetToken=null;
+  } catch { st.textContent='Network error'; }
+}
+
+function logout(){
+  if(authToken) fetch('/api/logout',{method:'POST',headers:{Authorization:`Bearer ${authToken}`}}).catch(()=>{});
+  authToken=null; authUser=null; authAvatar=null;
+  localStorage.removeItem('wt-auth');
+  updateAuthUI();
+}
+
+function setAuthStatus(msg){ const el=document.getElementById('authStatus'); if(el) el.textContent=msg; }
+
+// ── LOBBY ──
+function switchTab(tab){
+  document.querySelectorAll('.tab').forEach((t,idx)=>t.classList.toggle('active',(tab==='host'&&idx===0)||(tab==='join'&&idx===1)));
+  document.getElementById('hostTab').style.display=tab==='host'?'block':'none';
+  document.getElementById('joinTab').style.display=tab==='join'?'block':'none';
+}
+
+window.addEventListener('load',()=>{
+  const p=new URLSearchParams(location.search);
+  if(p.get('room')){ document.getElementById('joinCode').value=p.get('room'); switchTab('join'); }
+  // Автооткрытие модалки сброса пароля если в URL есть ?reset=
+  if(p.get('reset')){
+    _resetToken=p.get('reset');
+    showResetStep2();
+    document.getElementById('forgotModal').classList.add('open');
+  }
+  setTheme(localStorage.getItem('wt-theme')||'dark');
+  setLang('en');
+  updateAuthUI();
+  spawnPetals();
+  if(authUser){
+    document.getElementById('hostName').value=authUser;
+    document.getElementById('joinName').value=authUser;
+  }
+});
+
+function createRoom(){
+  const n=(document.getElementById('hostName').value.trim())||authUser;
+  if(!n) return;
+  myName=n; isHost=true; roomId=rid();
+  startApp();
+}
+function joinRoom(){
+  const n=(document.getElementById('joinName').value.trim())||authUser;
+  const c=document.getElementById('joinCode').value.trim().toUpperCase();
+  if(!n||!c) return;
+  myName=n; isHost=false; roomId=c;
+  startApp();
+}
+
+function goHome(){
+  // FIX [HIGH-5]: устанавливаем флаг ДО закрытия WS
+  _intentionalDisconnect=true;
+  roomId=null;
+  if(ws){ ws.onclose=null; ws.close(); ws=null; }
+  const v=document.getElementById('videoPlayer');
+  try{ v.pause(); }catch(e){}
+  if(v.src&&v.src.startsWith('blob:')) URL.revokeObjectURL(v.src);
+  v.removeAttribute('src'); v.srcObject=null; v.style.display='none';
+  try{ v.load(); }catch(e){}
+  isHost=false; isSyncing=false;
+  // FIX [LOW-1]: сброс флага событий при выходе
+  _eventsSetup=false;
+  document.getElementById('controls').style.display='none';
+  document.getElementById('uploadZone').style.display='none';
+  document.getElementById('waitingScreen').style.display='none';
+  document.getElementById('uploadProgressWrap').classList.remove('active');
+  document.getElementById('messages').innerHTML='';
+  // FIX [MED-2]: отключаем titleObserver при выходе
+  if(_titleObserver){ _titleObserver.disconnect(); _titleObserver=null; }
+  document.getElementById('fpsOverlay').style.display='none';
+  document.getElementById('videoArea').classList.remove('has-video');
+  queue=[]; queueCurrentIdx=-1; queuePopupOpen=false;
+  document.getElementById('queuePopup').classList.remove('open');
+  const qb=document.getElementById('queueBadge');
+  if(qb) qb.classList.remove('show');
+  const app=document.getElementById('app');
+  if(app.classList.contains('fs-mode')){
+    app.classList.remove('fs-mode','show-ctrl');
+  }
+  document.getElementById('app').style.display='none';
+  document.getElementById('lobby').style.display='flex';
+  history.replaceState(null,'',location.pathname);
+}
+
+function startApp(){
+  _intentionalDisconnect=false;
+  document.getElementById('lobby').style.display='none';
+  document.getElementById('app').style.display='flex';
+  document.getElementById('roomCodeDisplay').textContent=roomId;
+  if(isHost) document.getElementById('uploadZone').style.display='flex';
+  else { document.getElementById('waitingScreen').style.display='flex'; document.getElementById('waitingText').textContent=i('waitingHost'); }
+  connectWS();
+  if(authUser) loadFriends();
 }
 
 // ── WEBSOCKET ──
-wss.on('connection', (ws) => {
-  let roomId = null, clientId = null, isHost = false, wsUsername = null;
-  let _intentionalDisconnect = false; // FIX [HIGH-5]: флаг намеренного отключения
+function connectWS(){
+  const proto=location.protocol==='https:'?'wss':'ws';
+  ws=new WebSocket(`${proto}://${location.host}`);
+  myClientId=rid(8);
+  let _pingTime=Date.now();
 
-  ws.on('message', (raw) => {
-    // FIX [HIGH-4]: Ограничение размера WS-сообщений
-    if (raw.length > 65536) {
-      ws.close(1009, 'Message too large');
-      return;
-    }
-
-    let msg;
-    try { msg = JSON.parse(raw); } catch { return; }
-
-    if (msg.type === 'auth') {
-      const username = getSession(msg.token);
-      if (username) {
-        wsUsername = username;
-        wsUserMap.set(ws, username);
-        if (!onlineUsers.has(username)) onlineUsers.set(username, new Set());
-        onlineUsers.get(username).add(ws);
-        broadcastFriendStatus(username, true);
-        sendTo(ws, { type: 'auth_ok', username });
-      }
-    }
-
-    if (msg.type === 'join') {
-      roomId = msg.roomId;
-      clientId = msg.clientId || crypto.randomBytes(4).toString('hex');
-
-      // FIX [HIGH-4]: валидация roomId
-      if (!roomId || typeof roomId !== 'string' || !/^[A-Z0-9]{4,10}$/.test(roomId)) {
-        sendTo(ws, { type: 'error', message: 'Invalid room ID' });
-        return;
-      }
-
-      const room = getRoom(roomId);
-      room.lastActivity = Date.now();
-
-      // FIX [HIGH-2]: проверка прав хоста
-      const requestedHost = msg.isHost || false;
-      if (requestedHost) {
-        // Разрешаем быть хостом только если комната новая или хост ушёл
-        if (!room.host) {
-          isHost = true;
-          room.host = ws;
-          room.hostToken = msg.authToken || null; // сохраняем токен для верификации
-        } else {
-          // Кто-то уже хост — присоединяем как зрителя
-          isHost = false;
-          room.clients.set(clientId, ws);
-        }
-      } else {
-        isHost = false;
-        room.clients.set(clientId, ws);
-      }
-
-      const currentTime = room.state.playing
-        ? room.state.time + (Date.now() - room.state.updatedAt) / 1000
-        : room.state.time;
-
-      sendTo(ws, {
-        type: 'init',
-        hasVideo: room.hasVideo,
-        // FIX [MED-1]: не передаём serverFilename клиентам — только origName
-        videoOrigName: room.videoOrigName,
-        // FIX [MED-1]: передаём serverTime для корректной компенсации задержки
-        serverTime: Date.now(),
-        state: { ...room.state, time: currentTime },
-        viewers: getViewerCount(room),
-        clientId,
-        isHost  // сообщаем клиенту был ли он принят как хост
-      });
-
-      // Если видео есть — сообщаем через отдельный токен комнаты, не через filename
-      if (room.hasVideo && room.videoFile) {
-        sendTo(ws, {
-          type: 'video_ready',
-          // FIX [HIGH-3]: передаём roomId для построения URL, а не прямое имя файла
-          streamUrl: `/video-stream/${roomId}`,
-          origName: room.videoOrigName,
-          serverTime: Date.now(),
-          state: { ...room.state, time: currentTime }
-        });
-      }
-
-      broadcast(roomId, { type: 'viewers', count: getViewerCount(room) }, ws);
-    }
-
-    if (msg.type === 'sync' && isHost) {
-      const room = getRoom(roomId);
-      room.state = { playing: msg.playing, time: msg.time, updatedAt: Date.now() };
-      room.lastActivity = Date.now(); // FIX [HIGH-1]: обновляем активность
-      broadcast(roomId, { type: 'sync', playing: msg.playing, time: msg.time, serverTime: Date.now() }, ws);
-    }
-
-    if (msg.type === 'video_ready' && isHost) {
-      const room = getRoom(roomId);
-      room.hasVideo = true;
-      room.videoOrigName = msg.origName || msg.filename;
-      room.state = { playing: false, time: 0, updatedAt: Date.now() };
-      room.lastActivity = Date.now();
-      // FIX [HIGH-3]: клиентам отдаём только streamUrl и origName, не filename
-      broadcast(roomId, {
-        type: 'video_ready',
-        streamUrl: `/video-stream/${roomId}`,
-        origName: room.videoOrigName,
-        serverTime: Date.now()
-      }, ws);
-    }
-
-    // FIX [HIGH-4]: валидация chat-сообщений
-    if (msg.type === 'chat') {
-      const name = String(msg.name || '').slice(0, 24);
-      const text = String(msg.text || '').slice(0, 300);
-      // FIX [CRIT-3]: avatar берём из базы данных, а не из сообщения клиента
-      const users = loadUsers();
-      const safeAvatar = wsUsername && users[wsUsername] ? users[wsUsername].avatar : '';
-      broadcast(roomId, { type: 'chat', name, text, avatar: safeAvatar });
-    }
-  });
-
-  ws.on('close', () => {
-    if (wsUsername) {
-      const userWs = onlineUsers.get(wsUsername);
-      if (userWs) {
-        userWs.delete(ws);
-        if (userWs.size === 0) {
-          onlineUsers.delete(wsUsername);
-          broadcastFriendStatus(wsUsername, false);
-        }
-      }
-      wsUserMap.delete(ws);
-    }
-
-    if (!roomId || !rooms[roomId]) return;
-    const room = rooms[roomId];
-
-    if (isHost) {
-      room.host = null;
-      room.hostToken = null;
-      broadcast(roomId, { type: 'host_left' });
-      deleteRoomVideo(room);
-    } else {
-      room.clients.delete(clientId);
-    }
-
-    broadcast(roomId, { type: 'viewers', count: getViewerCount(room) });
-
-    if (!room.host && room.clients.size === 0) {
-      deleteRoomVideo(room);
-      delete rooms[roomId];
-    }
-  });
-});
-
-// ── VIDEO UPLOAD ──
-const storage = multer.diskStorage({
-  destination: UPLOAD_DIR,
-  filename: (req, file, cb) => {
-    const safe = file.originalname.replace(/[^a-zA-Z0-9.\-_]/g, '_');
-    cb(null, Date.now() + '_' + safe);
-  }
-});
-
-const upload = multer({
-  storage,
-  limits: { fileSize: 4 * 1024 * 1024 * 1024 },
-  fileFilter: (req, file, cb) => {
-    const allowed = ['video/mp4', 'video/webm', 'video/quicktime', 'video/x-msvideo', 'video/x-matroska', 'video/mpeg', 'video/ogg'];
-    if (allowed.includes(file.mimetype) || file.mimetype.startsWith('video/')) {
-      cb(null, true);
-    } else {
-      cb(new Error('Only video files allowed'));
-    }
-  }
-});
-
-// Upload: авторизация опциональна (гостевой режим), но roomId должен быть валидным
-app.post('/upload/:roomId', (req, res) => {
-  const roomId = req.params.roomId;
-  // Валидация roomId
-  if (!roomId || !/^[A-Z0-9]{4,10}$/i.test(roomId)) {
-    return res.status(400).json({ error: 'Invalid room ID' });
-  }
-  const room = rooms[roomId];
-  // Разрешаем загрузку если комната существует или создаётся
-  // (хост загружает до или после join)
-
-  upload.single('video')(req, res, (err) => {
-    if (err instanceof multer.MulterError) {
-      if (err.code === 'LIMIT_FILE_SIZE') return res.status(413).json({ error: 'File too large (max 4GB)' });
-      return res.status(400).json({ error: err.message });
-    }
-    if (err) return res.status(400).json({ error: err.message });
-    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-
-    const r = getRoom(roomId);
-
-    if (r.videoFile && r.videoFile !== req.file.filename) {
-      const oldFile = r.videoFile;
-      setTimeout(() => {
-        const inUse = getFilesInUse();
-        if (!inUse.has(oldFile)) {
-          try { fs.unlinkSync(path.join(UPLOAD_DIR, oldFile)); } catch {}
-        }
-      }, 5000);
-    }
-
-    r.videoFile = req.file.filename;
-    r.videoOrigName = req.file.originalname;
-    r.hasVideo = true;
-    r.lastActivity = Date.now();
-
-    // FIX [HIGH-3]: не возвращаем реальный filename клиенту — только origName
-    res.json({ origName: req.file.originalname, streamUrl: `/video-stream/${roomId}` });
-  });
-});
-
-// ── VIDEO INFO ──
-app.get('/video-info/:roomId', (req, res) => {
-  // FIX [CRIT-2]: проверяем авторизацию
-  const token = req.headers.authorization?.replace('Bearer ', '');
-  const username = getSession(token);
-  if (!username) return res.status(401).json({ error: 'Unauthorized' });
-
-  const room = rooms[req.params.roomId];
-  if (!room || !room.videoFile) return res.status(404).json({ error: 'Not found' });
-
-  const filePath = path.join(UPLOAD_DIR, room.videoFile);
-  if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'Not found' });
-
-  const stat = fs.statSync(filePath);
-  res.json({ size: stat.size, origName: room.videoOrigName });
-});
-
-// ── VIDEO STREAMING — через roomId, не через filename ──
-// FIX [CRIT-2] + [HIGH-3]: стримим по roomId, реальное имя файла клиенту не раскрывается
-function getContentType(filename) {
-  const ext = filename.split('.').pop().toLowerCase();
-  const types = {
-    mp4: 'video/mp4', mkv: 'video/x-matroska', avi: 'video/x-msvideo',
-    mov: 'video/quicktime', webm: 'video/webm', m4v: 'video/mp4',
-    mpeg: 'video/mpeg', mpg: 'video/mpeg', ogv: 'video/ogg'
+  ws.onopen=()=>{
+    _pingTime=Date.now();
+    ws.send(JSON.stringify({
+      type:'join',
+      roomId,
+      isHost,
+      clientId:myClientId,
+      authToken:authToken||null // FIX [HIGH-2]: передаём токен для верификации хоста
+    }));
+    if(authToken) ws.send(JSON.stringify({type:'auth',token:authToken}));
+    sysMsg(i('joined',myName,isHost));
   };
-  return types[ext] || 'video/mp4';
+
+  ws.onmessage=async(e)=>{
+    const msg=JSON.parse(e.data);
+
+    if(msg.type==='init'){
+      _networkLatency=(Date.now()-_pingTime)/2;
+      document.getElementById('viewersCount').textContent=msg.viewers;
+      // FIX [HIGH-2]: сервер сообщает реальный статус хоста
+      if(msg.isHost !== undefined) isHost=msg.isHost;
+    }
+    if(msg.type==='viewers') document.getElementById('viewersCount').textContent=msg.count;
+
+    if(msg.type==='video_ready'&&!isHost){
+      document.getElementById('waitingText').textContent=i('waitRecv');
+      loadVideoFromServer(msg.streamUrl, msg.state||null, msg.serverTime||null);
+      sysMsg(i('videoReceived'));
+    }
+    if(msg.type==='host_left') sysMsg(i('hostLeft'));
+
+    if(msg.type==='sync'&&!isHost){
+      const v=document.getElementById('videoPlayer');
+      if(!v.src) return;
+      isSyncing=true;
+      const latency=_networkLatency/1000;
+      const targetTime=msg.playing ? msg.time+latency : msg.time;
+      const drift=Math.abs(v.currentTime-targetTime);
+      if(drift>1.0){
+        v.currentTime=targetTime;
+        showSyncIndicator();
+      } else if(drift>0.3){
+        v.playbackRate=msg.playing?(drift>0?1.05:0.95):1;
+        setTimeout(()=>{ v.playbackRate=1; },1000);
+      }
+      if(msg.playing&&v.paused){ v.play().catch(()=>{}); }
+      if(!msg.playing&&!v.paused){ v.pause(); }
+      setPlayIcon(!msg.playing);
+      setTimeout(()=>isSyncing=false,300);
+    }
+
+    // FIX [CRIT-3]: avatar приходит с сервера (из базы), не от клиента
+    if(msg.type==='chat') addMsg(msg.name,msg.text,msg.avatar);
+
+    if(msg.type==='friend_status'||msg.type==='friend_request'||msg.type==='auth_ok') handleFriendWsMsg(msg);
+    if(msg.type==='error') sysMsg('Error: '+msg.message);
+  };
+
+  ws.onclose=()=>{
+    sysMsg(i('disconnected'));
+    // FIX [HIGH-5]: реконнект только если отключение не намеренное
+    if(roomId && !_intentionalDisconnect){
+      setTimeout(()=>{ if(roomId&&!_intentionalDisconnect&&(!ws||ws.readyState===3)) connectWS(); },3000);
+    }
+  };
 }
 
-app.get('/video-stream/:roomId', (req, res) => {
-  const roomId = req.params.roomId;
-  if (!/^[A-Z0-9]{4,10}$/i.test(roomId)) return res.status(400).send('Invalid room ID');
+function showSyncIndicator(){
+  const el=document.getElementById('syncIndicator');
+  el.textContent=i('syncingMsg');
+  el.classList.add('show');
+  setTimeout(()=>el.classList.remove('show'),2000);
+}
 
-  const room = rooms[roomId];
-  if (!room || !room.videoFile) return res.status(404).send('No video in this room');
-
-  const filename = room.videoFile;
-  const filePath = path.join(UPLOAD_DIR, filename);
-
-  if (!filePath.startsWith(path.resolve(UPLOAD_DIR))) return res.status(403).send('Forbidden');
-  if (!fs.existsSync(filePath)) return res.status(404).send('Not found');
-
-  const stat = fs.statSync(filePath);
-  const fileSize = stat.size;
-  const contentType = getContentType(filename);
-  const range = req.headers.range;
-
-  // Общие заголовки для кеширования и буферизации
-  const commonHeaders = {
-    'Content-Type': contentType,
-    'Accept-Ranges': 'bytes',
-    'Cache-Control': 'no-store',           // не кешировать — файл временный
-    'X-Content-Type-Options': 'nosniff',
-  };
-
-  if (range) {
-    const parts = range.replace(/bytes=/, '').split('-');
-    const start = parseInt(parts[0], 10);
-    // Отдаём крупные чанки — 4MB вместо до конца файла
-    // Это даёт браузеру хорошую буферизацию без перегрузки памяти
-    const CHUNK = 4 * 1024 * 1024;
-    const end = parts[1] ? parseInt(parts[1], 10) : Math.min(start + CHUNK - 1, fileSize - 1);
-    const chunkSize = end - start + 1;
-
-    res.writeHead(206, {
-      ...commonHeaders,
-      'Content-Range': `bytes ${start}-${end}/${fileSize}`,
-      'Content-Length': chunkSize,
-    });
-
-    // highWaterMark = 512KB — оптимальный размер буфера чтения с диска
-    fs.createReadStream(filePath, { start, end, highWaterMark: 512 * 1024 }).pipe(res);
+// ── VIDEO ──
+function selectVideo(input){
+  const f=input.files[0]; if(!f) return;
+  if(isHost){
+    if(queue.length>0){
+      queue.push({id:_nextQueueId++,filename:f.name,file:f,uploaded:false,serverFilename:null});
+      renderQueue(); updateQueueBadge();
+    } else {
+      queue=[{id:_nextQueueId++,filename:f.name,file:f,uploaded:false,serverFilename:null}];
+      queueCurrentIdx=0;
+      renderQueue(); updateQueueBadge();
+      uploadVideo(f);
+    }
   } else {
-    res.writeHead(200, {
-      ...commonHeaders,
-      'Content-Length': fileSize,
-    });
-    fs.createReadStream(filePath, { highWaterMark: 512 * 1024 }).pipe(res);
+    uploadVideo(f);
+  }
+}
+
+function uploadVideo(file){
+  const uploadZone=document.getElementById('uploadZone');
+  const wrap=document.getElementById('uploadProgressWrap');
+  uploadZone.style.display='none';
+  wrap.classList.add('active');
+  document.getElementById('uploadPct').textContent='0%';
+  document.getElementById('uploadFill').style.width='0%';
+  document.getElementById('uploadInfo').textContent='';
+
+  const xhr=new XMLHttpRequest();
+  xhr.open('POST',`/upload/${roomId}`);
+  // FIX [CRIT-2]: передаём токен авторизации при загрузке
+  if(authToken) xhr.setRequestHeader('Authorization',`Bearer ${authToken}`);
+  const uploadStart=Date.now();
+
+  xhr.upload.onprogress=(e)=>{
+    if(e.lengthComputable){
+      const pct=Math.round((e.loaded/e.total)*100);
+      const elapsed=(Date.now()-uploadStart)/1000||0.001;
+      const speed=e.loaded/elapsed;
+      const remaining=(e.total-e.loaded)/speed;
+      document.getElementById('uploadPct').textContent=pct+'%';
+      document.getElementById('uploadFill').style.width=pct+'%';
+      const speedStr=speed>1048576?`${(speed/1048576).toFixed(1)} MB/s`:`${(speed/1024).toFixed(0)} KB/s`;
+      const etaStr=isFinite(remaining)?(remaining>60?`${Math.ceil(remaining/60)}m left`:`${Math.ceil(remaining)}s left`):'';
+      document.getElementById('uploadInfo').textContent=`${speedStr}${etaStr?' · '+etaStr:''}`;
+    }
+  };
+  xhr.onload=()=>{
+    wrap.classList.remove('active');
+    if(xhr.status!==200){ sysMsg('Upload failed ('+xhr.status+')'); uploadZone.style.display='flex'; return; }
+    const res=JSON.parse(xhr.responseText);
+    // сервер возвращает streamUrl
+    if(queue[queueCurrentIdx]&&!queue[queueCurrentIdx].uploaded){
+      queue[queueCurrentIdx].uploaded=true;
+      queue[queueCurrentIdx].streamUrl=res.streamUrl;
+    }
+    loadVideoFromServer(res.streamUrl,null,null);
+    if(ws&&ws.readyState===1) ws.send(JSON.stringify({
+      type:'video_ready',
+      origName:res.origName
+    }));
+    sysMsg(i('videoSelected'));
+  };
+  xhr.onerror=()=>{ wrap.classList.remove('active'); uploadZone.style.display='flex'; sysMsg('Upload failed'); };
+  xhr.send(createFormData(file));
+}
+
+function createFormData(file){
+  const fd=new FormData(); fd.append('video',file); return fd;
+}
+
+// FIX [MED-2]: единственный MutationObserver для title, хранится в переменной
+let _titleObserver=null;
+
+function loadVideoFromServer(src, state, serverTime){
+  // FIX [LOW-1]: сбрасываем _eventsSetup перед загрузкой нового видео
+  _eventsSetup=false;
+  // FIX [MED-2]: отключаем старый observer перед созданием нового
+  if(_titleObserver){ _titleObserver.disconnect(); _titleObserver=null; }
+
+  const video=document.getElementById('videoPlayer');
+  video.src=''; video.src=src;
+
+  const fixTitle=()=>{ document.title='Watch Together'; };
+  _titleObserver=new MutationObserver(fixTitle);
+  _titleObserver.observe(document.querySelector('title'),{childList:true,characterData:true,subtree:true});
+
+  video.addEventListener('canplay',()=>{
+    showPlayer();
+    setupEvents();
+    if(state){
+      // FIX [MED-1]: используем serverTime для корректной компенсации задержки
+      let targetTime=state.time||0;
+      if(state.playing&&serverTime){
+        const elapsed=(Date.now()-serverTime)/1000+_networkLatency/1000;
+        targetTime+=elapsed;
+      }
+      video.currentTime=Math.min(targetTime,video.duration||targetTime);
+      if(state.playing) video.play().catch(()=>{});
+      setPlayIcon(!state.playing);
+    }
+  },{once:true});
+}
+
+function showPlayer(){
+  document.getElementById('videoPlayer').style.display='block';
+  document.getElementById('uploadZone').style.display='none';
+  document.getElementById('waitingScreen').style.display='none';
+  document.getElementById('controls').style.display='block';
+  document.getElementById('videoArea').classList.add('has-video');
+  if(isHost){
+    document.getElementById('changeVideoBtn').style.display='flex';
+    document.getElementById('playPauseBtn').style.display='flex';
+    document.getElementById('queueBtn').style.display='flex';
+  } else {
+    document.getElementById('playPauseBtn').style.display='none';
+    document.getElementById('progressBg').style.cursor='default';
+  }
+}
+
+let _eventsSetup=false;
+let _controlsTimer=null;
+function showControls(){
+  const c=document.getElementById('controls');
+  c.classList.add('visible');
+  clearTimeout(_controlsTimer);
+  const v=document.getElementById('videoPlayer');
+  _controlsTimer=setTimeout(()=>{
+    if(!_mouseOverControls) c.classList.remove('visible');
+  }, v&&v.paused ? 3000 : 1000);
+}
+let _mouseOverControls=false;
+
+function setupEvents(){
+  if(_eventsSetup) return; _eventsSetup=true;
+  const v=document.getElementById('videoPlayer');
+
+  const isChrome=!!window.chrome&&!window.opr;
+  if(isChrome){
+    v.addEventListener('error',()=>{
+      document.getElementById('codecWarning').classList.add('show');
+    },{once:true});
+  }
+
+  v.addEventListener('timeupdate',()=>{
+    if(v.duration){
+      const pct=(v.currentTime/v.duration)*100;
+      document.getElementById('progressFill').style.width=pct+'%';
+      document.getElementById('progressThumb').style.left=pct+'%';
+      document.getElementById('timeLabel').textContent=`${ft(v.currentTime)} / ${ft(v.duration)}`;
+    }
+    if(isHost&&!isSyncing) throttleSync(v);
+  });
+  v.addEventListener('play',()=>{ setPlayIcon(false); if(isHost) syncHost(); showControls(); });
+  v.addEventListener('pause',()=>{ setPlayIcon(true); if(isHost) syncHost(); showControls(); });
+  v.addEventListener('ended', onVideoEnded);
+  v.addEventListener('dblclick',toggleFullscreen);
+
+  const va=document.getElementById('videoArea');
+  va.addEventListener('mousemove',()=>{
+    showControls();
+    const app=document.getElementById('app');
+    if(app.classList.contains('fs-mode')) app.classList.add('show-ctrl');
+  });
+  va.addEventListener('mouseleave',()=>{
+    document.getElementById('app').classList.remove('show-ctrl');
+  });
+  va.addEventListener('touchstart',()=>showControls(),{passive:true});
+
+  const ctrl=document.getElementById('controls');
+  ctrl.addEventListener('mouseenter',()=>{ _mouseOverControls=true; clearTimeout(_controlsTimer); });
+  ctrl.addEventListener('mouseleave',()=>{ _mouseOverControls=false; showControls(); });
+
+  showControls();
+}
+
+// ── FPS СЧЁТЧИК ──
+let _fpsVisible=false;
+let _fpsInterval=null;
+let _fpsPrevFrames=0;
+let _fpsPrevDropped=0;
+
+function toggleFpsOverlay(){
+  _fpsVisible=!_fpsVisible;
+  const btn=document.getElementById('fpsBtn');
+  if(_fpsVisible){
+    const overlay=document.getElementById('fpsOverlay');
+    overlay.style.display='block';
+    if(btn) btn.style.color='var(--accent)';
+    _fpsPrevFrames=0; _fpsPrevDropped=0;
+    _fpsInterval=setInterval(()=>{
+      const v=document.getElementById('videoPlayer');
+      if(!v||!v.src) return;
+      const q=v.getVideoPlaybackQuality?.();
+      if(!q) return;
+      const fps=q.totalVideoFrames-_fpsPrevFrames;
+      const dropped=q.droppedVideoFrames-_fpsPrevDropped;
+      _fpsPrevFrames=q.totalVideoFrames;
+      _fpsPrevDropped=q.droppedVideoFrames;
+      document.getElementById('fpsVal').textContent=`FPS: ${fps}`;
+      document.getElementById('fpsDropped').textContent=dropped>0?`Dropped: ${dropped}`:'';
+      const vEl=document.getElementById('videoPlayer');
+      document.getElementById('fpsRes').textContent=
+        vEl.videoWidth?`${vEl.videoWidth}×${vEl.videoHeight}`:'';
+    },1000);
+  } else {
+    clearInterval(_fpsInterval);
+    document.getElementById('fpsOverlay').style.display='none';
+    if(btn) btn.style.color='';
+  }
+}
+
+function setPlayIcon(showPlay){
+  const path=document.querySelector('#playIcon path');
+  if(path) path.setAttribute('d',showPlay?'M5 3l14 9-14 9V3z':'M6 19h4V5H6v14zm8-14v14h4V5h-4z');
+}
+
+let _syncTimer=null;
+function throttleSync(v){
+  if(_syncTimer) return;
+  _syncTimer=setTimeout(()=>{
+    _syncTimer=null;
+    if(!isSyncing&&ws&&ws.readyState===1)
+      ws.send(JSON.stringify({type:'sync',playing:!v.paused,time:v.currentTime}));
+  },400);
+}
+function syncHost(){
+  if(!isHost||isSyncing) return;
+  const v=document.getElementById('videoPlayer');
+  if(!v.src) return;
+  if(ws&&ws.readyState===1) ws.send(JSON.stringify({type:'sync',playing:!v.paused,time:v.currentTime}));
+}
+
+function togglePlay(){
+  if(!isHost) return;
+  const v=document.getElementById('videoPlayer');
+  if(!v.src) return;
+  v.paused?v.play():v.pause();
+}
+
+function seekByClick(e){
+  if(!isHost) return;
+  const v=document.getElementById('videoPlayer');
+  if(!v.duration) return;
+  const rect=document.getElementById('progressBg').getBoundingClientRect();
+  const pct=Math.max(0,Math.min(1,(e.clientX-rect.left)/rect.width));
+  v.currentTime=pct*v.duration;
+  document.getElementById('progressFill').style.width=(pct*100)+'%';
+  document.getElementById('progressThumb').style.left=(pct*100)+'%';
+  syncHost();
+}
+
+let _dragging=false;
+function startDrag(e){ if(isHost){ _dragging=true; e.preventDefault(); } }
+document.addEventListener('mousemove',e=>{
+  if(!_dragging||!isHost) return;
+  const v=document.getElementById('videoPlayer');
+  if(!v.duration) return;
+  const rect=document.getElementById('progressBg').getBoundingClientRect();
+  const pct=Math.max(0,Math.min(1,(e.clientX-rect.left)/rect.width));
+  v.currentTime=pct*v.duration;
+  document.getElementById('progressFill').style.width=(pct*100)+'%';
+  document.getElementById('progressThumb').style.left=(pct*100)+'%';
+  document.getElementById('timeLabel').textContent=`${ft(v.currentTime)} / ${ft(v.duration)}`;
+  showControls();
+});
+document.addEventListener('mouseup',()=>{ if(_dragging){ _dragging=false; syncHost(); } });
+
+function skipTime(sec){
+  if(!isHost) return;
+  const v=document.getElementById('videoPlayer');
+  if(!v.duration) return;
+  v.currentTime=Math.max(0,Math.min(v.duration,v.currentTime+sec));
+  syncHost(); showControls();
+}
+
+// ── KEYBOARD SHORTCUTS ──
+document.addEventListener('keydown', e => {
+  const tag=document.activeElement.tagName;
+  if(tag==='INPUT'||tag==='TEXTAREA') return;
+  // FIX [LOW-2]: проверяем что приложение открыто
+  if(document.getElementById('app').style.display==='none') return;
+  const v=document.getElementById('videoPlayer');
+  if(!v||v.style.display==='none') return;
+
+  if(e.code==='Space'){ e.preventDefault(); if(isHost) togglePlay(); showControls(); }
+  if(e.code==='ArrowRight'&&isHost){ e.preventDefault(); skipTime(5); }
+  if(e.code==='ArrowLeft'&&isHost){ e.preventDefault(); skipTime(-5); }
+  if(e.code==='ArrowUp'){ e.preventDefault(); const sl=document.getElementById('volSlider'); const nv=Math.min(1,parseFloat(sl.value)+0.1); sl.value=nv; setVolume(nv); }
+  if(e.code==='ArrowDown'){ e.preventDefault(); const sl=document.getElementById('volSlider'); const nv=Math.max(0,parseFloat(sl.value)-0.1); sl.value=nv; setVolume(nv); }
+  if(e.code==='KeyF'){ e.preventDefault(); toggleFullscreen(); }
+  if(e.code==='KeyM'){ e.preventDefault(); toggleMute(); }
+});
+
+function setVolume(val){
+  const v=document.getElementById('videoPlayer');
+  v.volume=parseFloat(val); v.muted=false;
+  updateVolIcon(parseFloat(val));
+}
+function toggleMute(){
+  const v=document.getElementById('videoPlayer');
+  const sl=document.getElementById('volSlider');
+  if(v.muted||v.volume===0){
+    v.muted=false; v.volume=sl._lastVol||0.8; sl.value=v.volume;
+  } else {
+    sl._lastVol=v.volume; v.muted=true; sl.value=0;
+  }
+  updateVolIcon(v.muted?0:v.volume);
+}
+function updateVolIcon(vol){
+  const icon=document.getElementById('volIcon');
+  if(!icon) return;
+  if(vol<=0) icon.innerHTML='<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/>';
+  else if(vol<0.5) icon.innerHTML='<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 010 7.07"/>';
+  else icon.innerHTML='<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 010 14.14"/><path d="M15.54 8.46a5 5 0 010 7.07"/>';
+}
+
+// ── FULLSCREEN ──
+
+function toggleFullscreen(){
+  const app=document.getElementById('app');
+  const isFs=!!document.fullscreenElement||!!document.webkitFullscreenElement;
+  if(!isFs){
+    const req=app.requestFullscreen||app.webkitRequestFullscreen||app.mozRequestFullScreen;
+    if(req) req.call(app); else enterFsMode();
+  } else {
+    const exit=document.exitFullscreen||document.webkitExitFullscreen||document.mozCancelFullScreen;
+    if(exit) exit.call(document); else exitFsMode();
+  }
+}
+
+function enterFsMode(){
+  document.getElementById('app').classList.add('fs-mode');
+  document.getElementById('fsIcon').innerHTML='<path d="M8 3v3a2 2 0 01-2 2H3m18 0h-3a2 2 0 01-2-2V3m0 18v-3a2 2 0 012-2h3M3 16h3a2 2 0 012 2v3"/>';
+  syncFsChat();
+  showControls();
+}
+
+function exitFsMode(){
+  document.getElementById('app').classList.remove('fs-mode','show-ctrl');
+  document.getElementById('fsIcon').innerHTML='<path d="M8 3H5a2 2 0 00-2 2v3m18 0V5a2 2 0 00-2-2h-3m0 18h3a2 2 0 002-2v-3M3 16v3a2 2 0 002 2h3"/>';
+}
+
+function onFsChange(){
+  const isFs=!!document.fullscreenElement||!!document.webkitFullscreenElement;
+  if(isFs) enterFsMode(); else exitFsMode();
+}
+document.addEventListener('fullscreenchange',onFsChange);
+document.addEventListener('webkitfullscreenchange',onFsChange);
+document.addEventListener('mozfullscreenchange',onFsChange);
+
+function syncFsChat(){
+  const dst=document.getElementById('fsChatMessages');
+  dst.innerHTML=document.getElementById('messages').innerHTML;
+  dst.scrollTop=dst.scrollHeight;
+}
+
+function sendFsChat(){
+  const inp=document.getElementById('fsChatInput');
+  const txt=inp.value.trim(); if(!txt||!ws) return;
+  ws.send(JSON.stringify({type:'chat',name:myName,text:txt}));
+  inp.value='';
+}
+
+// ── QUEUE ──
+let queue=[];
+let queueCurrentIdx=-1;
+let queuePopupOpen=false;
+// FIX [MED-3]: целочисленный счётчик вместо float id
+let _nextQueueId=1;
+
+function toggleQueue(){
+  queuePopupOpen=!queuePopupOpen;
+  document.getElementById('queuePopup').classList.toggle('open',queuePopupOpen);
+}
+
+document.addEventListener('click',e=>{
+  const popup=document.getElementById('queuePopup');
+  const btn=document.getElementById('queueBtn');
+  if(queuePopupOpen&&popup&&!popup.contains(e.target)&&btn&&!btn.contains(e.target)){
+    queuePopupOpen=false;
+    popup.classList.remove('open');
   }
 });
 
-// ── HEALTH CHECK ──
-app.get('/health', (req, res) => res.json({
-  status: 'ok',
-  uptime: Math.floor(process.uptime()),
-  rooms: Object.keys(rooms).length,
-  onlineUsers: onlineUsers.size
-}));
-
-// ── KEEP-ALIVE ──
-// Пингуем себя каждые 14 минут чтобы не засыпать на Railway/Render/Heroku.
-// Установи переменную окружения SELF_URL = https://your-app.railway.app
-const SELF_URL = process.env.SELF_URL
-  || process.env.RAILWAY_STATIC_URL
-  || process.env.RENDER_EXTERNAL_URL
-  || null;
-
-function selfPing() {
-  if (!SELF_URL) return;
-  const url = `${SELF_URL.replace(/\/$/, '')}/health`;
-  const lib = url.startsWith('https') ? require('https') : require('http');
-  const req = lib.get(url, res => {
-    console.log(`[keep-alive] ${new Date().toISOString()} → ${res.statusCode}`);
+function addToQueue(input){
+  const files=Array.from(input.files);
+  files.forEach(file=>{
+    queue.push({id:_nextQueueId++,filename:file.name,file,uploaded:false,streamUrl:null});
   });
-  req.on('error', err => console.warn(`[keep-alive] failed: ${err.message}`));
-  req.end();
+  input.value='';
+  renderQueue(); updateQueueBadge();
+  if(queueCurrentIdx===-1&&document.getElementById('videoPlayer').style.display==='none'){
+    playQueueItem(0);
+  }
 }
 
-// Первый пинг через минуту после старта, затем каждые 14 минут
-setTimeout(() => { selfPing(); setInterval(selfPing, 14 * 60 * 1000); }, 60 * 1000);
+function removeFromQueue(id){
+  const idx=queue.findIndex(q=>q.id===id);
+  if(idx===-1) return;
+  if(idx===queueCurrentIdx){
+    queue.splice(idx,1);
+    if(queue.length>0){ queueCurrentIdx=Math.min(idx,queue.length-1); playQueueItem(queueCurrentIdx); }
+    else queueCurrentIdx=-1;
+  } else {
+    queue.splice(idx,1);
+    if(idx<queueCurrentIdx) queueCurrentIdx--;
+  }
+  renderQueue(); updateQueueBadge();
+}
 
-// ── STATIC ──
-app.get('/favicon.ico', (req, res) => res.sendFile(path.join(__dirname, 'public', 'favicon.ico')));
-app.get('/favicon-32.png', (req, res) => res.sendFile(path.join(__dirname, 'public', 'favicon-32.png')));
-app.get('/favicon-16.png', (req, res) => res.sendFile(path.join(__dirname, 'public', 'favicon-16.png')));
-app.use(express.static(path.join(__dirname, 'public')));
+async function playQueueItem(idx){
+  if(idx<0||idx>=queue.length) return;
+  queueCurrentIdx=idx;
+  const item=queue[idx];
+  renderQueue();
+  if(!item.uploaded){ await uploadQueueItem(item); }
+  if(!item.streamUrl) return;
+  loadVideoFromServer(item.streamUrl,null,null);
+  if(ws&&ws.readyState===1){
+    ws.send(JSON.stringify({type:'video_ready',origName:item.filename}));
+  }
+  sysMsg(`▶ Now playing: ${item.filename}`);
+}
 
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, '0.0.0.0', () => {
-  console.log(`WatchTogether running on port ${PORT}`);
-  if (SELF_URL) console.log(`[keep-alive] enabled → ${SELF_URL}/health every 14 min`);
-  else console.log(`[keep-alive] set SELF_URL env var to prevent sleep`);
-});
+function uploadQueueItem(item){
+  return new Promise(resolve=>{
+    const wrap=document.getElementById('uploadProgressWrap');
+    wrap.classList.add('active');
+    document.getElementById('uploadZone').style.display='none';
+    document.getElementById('uploadPct').textContent='0%';
+    document.getElementById('uploadFill').style.width='0%';
+    document.getElementById('uploadInfo').textContent=`Uploading: ${item.filename}`;
+
+    const xhr=new XMLHttpRequest();
+    xhr.open('POST',`/upload/${roomId}`);
+    if(authToken) xhr.setRequestHeader('Authorization',`Bearer ${authToken}`);
+    const start=Date.now();
+
+    xhr.upload.onprogress=e=>{
+      if(e.lengthComputable){
+        const pct=Math.round(e.loaded/e.total*100);
+        const spd=e.loaded/((Date.now()-start)/1000||1);
+        const eta=(e.total-e.loaded)/spd;
+        document.getElementById('uploadPct').textContent=pct+'%';
+        document.getElementById('uploadFill').style.width=pct+'%';
+        const sStr=spd>1048576?`${(spd/1048576).toFixed(1)} MB/s`:`${(spd/1024).toFixed(0)} KB/s`;
+        const eStr=isFinite(eta)?(eta>60?`${Math.ceil(eta/60)}m`:`${Math.ceil(eta)}s`):'';
+        document.getElementById('uploadInfo').textContent=`${item.filename} · ${sStr}${eStr?' · '+eStr+' left':''}`;
+      }
+    };
+    xhr.onload=()=>{
+      wrap.classList.remove('active');
+      if(xhr.status===200){
+        const res=JSON.parse(xhr.responseText);
+        item.uploaded=true;
+        item.streamUrl=res.streamUrl;
+      } else {
+        sysMsg(`Upload failed for ${item.filename}`);
+      }
+      resolve();
+    };
+    xhr.onerror=()=>{ wrap.classList.remove('active'); sysMsg('Upload error'); resolve(); };
+    xhr.send(createFormData(item.file));
+  });
+}
+
+function renderQueue(){
+  const list=document.getElementById('queueList');
+  const empty=document.getElementById('queueEmpty');
+  const countEl=document.getElementById('queueCount');
+  countEl.textContent=queue.length;
+  if(queue.length===0){
+    empty.style.display='block';
+    list.innerHTML='';
+    list.appendChild(empty);
+    return;
+  }
+  empty.style.display='none';
+  list.innerHTML='';
+  queue.forEach((item,idx)=>{
+    const isActive=idx===queueCurrentIdx;
+    const div=document.createElement('div');
+    div.className='queue-item'+(isActive?' active-item':'');
+    div.dataset.idx=idx;
+    div.draggable=true;
+    const shortName=item.filename.replace(/\.[^.]+$/,'').replace(/_/g,' ');
+    div.innerHTML=`
+      <div class="queue-drag-handle" title="Drag to reorder">
+        <svg viewBox="0 0 24 24"><line x1="8" y1="6" x2="16" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="8" y1="18" x2="16" y2="18"/></svg>
+      </div>
+      <div class="queue-item-num">${idx+1}</div>
+      <div class="queue-item-icon">
+        <svg viewBox="0 0 24 24"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+      </div>
+      <div class="queue-item-name" title="${esc(item.filename)}">${esc(shortName)}</div>
+      <div class="queue-item-playing">▶ NOW</div>
+      <button class="queue-delete-btn" title="Remove">
+        <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>`;
+
+    // FIX [MED-3]: используем event delegation вместо inline onclick с float id
+    div.querySelector('.queue-delete-btn').addEventListener('click', e => {
+      e.stopPropagation();
+      removeFromQueue(item.id);
+    });
+
+    div.addEventListener('dblclick',()=>playQueueItem(idx));
+    div.addEventListener('dragstart',e=>{
+      e.dataTransfer.effectAllowed='move';
+      e.dataTransfer.setData('text/plain',idx);
+      div.classList.add('dragging');
+    });
+    div.addEventListener('dragend',()=>div.classList.remove('dragging'));
+    div.addEventListener('dragover',e=>{ e.preventDefault(); div.classList.add('drag-over'); });
+    div.addEventListener('dragleave',()=>div.classList.remove('drag-over'));
+    div.addEventListener('drop',e=>{
+      e.preventDefault();
+      div.classList.remove('drag-over');
+      const fromIdx=parseInt(e.dataTransfer.getData('text/plain'));
+      const toIdx=idx;
+      if(fromIdx===toIdx) return;
+      const moved=queue.splice(fromIdx,1)[0];
+      queue.splice(toIdx,0,moved);
+      if(queueCurrentIdx===fromIdx) queueCurrentIdx=toIdx;
+      else if(fromIdx<queueCurrentIdx&&toIdx>=queueCurrentIdx) queueCurrentIdx--;
+      else if(fromIdx>queueCurrentIdx&&toIdx<=queueCurrentIdx) queueCurrentIdx++;
+      renderQueue();
+      broadcastQueue();
+    });
+
+    list.appendChild(div);
+  });
+}
+
+function updateQueueBadge(){
+  const badge=document.getElementById('queueBadge');
+  if(!badge) return;
+  const remaining=queue.length-(queueCurrentIdx+1);
+  if(remaining>0){ badge.textContent=remaining; badge.classList.add('show'); }
+  else badge.classList.remove('show');
+}
+
+function broadcastQueue(){
+  if(!ws||ws.readyState!==1||!isHost) return;
+  ws.send(JSON.stringify({
+    type:'queue_update',
+    queue:queue.map((q,i)=>({idx:i,filename:q.filename,uploaded:q.uploaded})),
+    currentIdx:queueCurrentIdx
+  }));
+}
+
+function onVideoEnded(){
+  if(!isHost) return;
+  const nextIdx=queueCurrentIdx+1;
+  if(nextIdx<queue.length){ playQueueItem(nextIdx); updateQueueBadge(); }
+}
+
+// ── CHAT ──
+// FIX [LOW-3]: добавляем в единый массив и рендерим оба контейнера
+function addMsg(author,text,avatar){
+  const m=document.getElementById('messages');
+  const d=document.createElement('div'); d.className='msg';
+  const av=avatar?`<span style="margin-right:.3rem">${esc(avatar)}</span>`:'';
+  d.innerHTML=`<div class="msg-author">${av}${esc(author)}</div><div class="msg-text">${esc(text)}</div>`;
+  m.appendChild(d); m.scrollTop=m.scrollHeight;
+  // всегда синхронизируем fs-чат
+  const dst=document.getElementById('fsChatMessages');
+  const clone=d.cloneNode(true);
+  dst.appendChild(clone);
+  dst.scrollTop=dst.scrollHeight;
+}
+
+function sysMsg(text){
+  const m=document.getElementById('messages');
+  const d=document.createElement('div'); d.className='msg msg-system';
+  d.innerHTML=`<div class="msg-text">· ${esc(text)}</div>`;
+  m.appendChild(d); m.scrollTop=m.scrollHeight;
+}
+
+function sendChat(){
+  const inp=document.getElementById('chatInput');
+  const txt=inp.value.trim(); if(!txt||!ws) return;
+  // avatar не передаём — сервер возьмёт из базы
+  ws.send(JSON.stringify({type:'chat',name:myName,text:txt}));
+  inp.value='';
+}
+
+// ── COPY / SHARE ──
+function copyRoomLink(){
+  if(!roomId) return;
+  navigator.clipboard.writeText(`${location.origin}?room=${roomId}`);
+  const btn=document.getElementById('roomCopyBtn');
+  if(btn){ btn.style.color='var(--accent)'; setTimeout(()=>btn.style.color='',1500); }
+}
+function openShare(){
+  document.getElementById('shareLink').value=`${location.origin}?room=${roomId}`;
+  document.getElementById('shareCode').textContent=roomId;
+  document.getElementById('shareModal').classList.add('open');
+}
+function closeShare(){ document.getElementById('shareModal').classList.remove('open'); }
+function copyLink(){
+  navigator.clipboard.writeText(document.getElementById('shareLink').value);
+  const b=document.getElementById('copyBtnLabel');
+  b.textContent=i('copyDone'); setTimeout(()=>b.textContent=i('copyBtn'),2000);
+}
+
+// ── FRIENDS ──
+function toggleFriends(){
+  if(!authUser) return;
+  friendsPanelOpen=!friendsPanelOpen;
+  document.getElementById('friendsPanel').classList.toggle('open',friendsPanelOpen);
+  if(friendsPanelOpen) loadFriends();
+}
+
+async function loadFriends(){
+  if(!authToken) return;
+  try {
+    const r=await fetch('/api/me',{headers:{Authorization:`Bearer ${authToken}`}});
+    if(!r.ok) return;
+    const data=await r.json();
+    renderFriends(data.friends||[],data.friendRequests||[]);
+  } catch {}
+}
+
+function renderFriends(friends,requests){
+  const list=document.getElementById('friendsList');
+  const reqSection=document.getElementById('friendRequestsSection');
+  const reqList=document.getElementById('friendRequestsList');
+
+  if(requests.length>0){
+    reqSection.style.display='block';
+    reqList.innerHTML=requests.map(r=>`
+      <div class="fp-item">
+        <div class="fp-avatar">🌸</div>
+        <div class="fp-info"><div class="fp-name">${esc(r)}</div><div class="fp-status-text">wants to be friends</div></div>
+        <div class="fp-actions">
+          <button class="fp-action-btn accept" onclick="acceptFriend('${esc(r)}')">✓</button>
+          <button class="fp-action-btn decline" onclick="declineFriend('${esc(r)}')">✕</button>
+        </div>
+      </div>`).join('');
+    document.getElementById('friendsNotif').classList.add('show');
+  } else {
+    reqSection.style.display='none';
+    document.getElementById('friendsNotif').classList.remove('show');
+  }
+
+  if(friends.length===0){
+    list.innerHTML=`<div class="fp-empty">${esc(i('noFriends')).replace('\n','<br>')}</div>`;
+    return;
+  }
+  list.innerHTML=friends.map(f=>{
+    const av=f.avatar||'🌸';
+    const inv=roomId?`<button class="fp-action-btn accept" onclick="inviteFriendToRoom('${esc(f.username)}')" title="Invite">📨</button>`:'';
+    return `<div class="fp-item">
+      <div class="fp-avatar">${esc(av)}<div class="fp-status-dot ${f.online?'online':'offline'}"></div></div>
+      <div class="fp-info"><div class="fp-name">${esc(f.username)}</div><div class="fp-status-text ${f.online?'online':''}">${f.online?'Online':'Offline'}</div></div>
+      <div class="fp-actions">${inv}<button class="fp-action-btn decline" onclick="removeFriend('${esc(f.username)}')">✕</button></div>
+    </div>`;
+  }).join('');
+}
+
+async function sendFriendRequest(){
+  const input=document.getElementById('addFriendInput');
+  const username=input.value.trim();
+  if(!username||!authToken) return;
+  try {
+    const r=await fetch('/api/friends/request',{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${authToken}`},body:JSON.stringify({username})});
+    const data=await r.json();
+    if(r.ok){ input.value=''; sysMsg(`Friend request sent to ${username}`); }
+    else sysMsg(data.error||'Error');
+  } catch {}
+}
+async function acceptFriend(username){
+  if(!authToken) return;
+  await fetch('/api/friends/accept',{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${authToken}`},body:JSON.stringify({username})});
+  loadFriends();
+}
+async function declineFriend(username){
+  if(!authToken) return;
+  await fetch('/api/friends/decline',{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${authToken}`},body:JSON.stringify({username})});
+  loadFriends();
+}
+async function removeFriend(username){
+  if(!authToken) return;
+  await fetch(`/api/friends/${username}`,{method:'DELETE',headers:{Authorization:`Bearer ${authToken}`}});
+  loadFriends();
+}
+function inviteFriendToRoom(username){
+  if(!roomId) return;
+  navigator.clipboard.writeText(`${location.origin}?room=${roomId}`).catch(()=>{});
+  if(ws&&ws.readyState===1) ws.send(JSON.stringify({type:'chat',name:myName,text:`Invited ${username} — join: ${location.origin}?room=${roomId}`}));
+  sysMsg(`Invite link copied for ${username}`);
+}
+function handleFriendWsMsg(msg){
+  if(msg.type==='friend_status'||msg.type==='friend_request') loadFriends();
+  if(msg.type==='friend_request') document.getElementById('friendsNotif').classList.add('show');
+}
+
+// ── PETALS ──
+function spawnPetals(){
+  function c(){
+    const p=document.createElement('div'); p.className='petal';
+    const isDark=document.documentElement.getAttribute('data-theme')==='dark';
+    const hue=isDark?(310+Math.random()*35):(335+Math.random()*25);
+    const sat=isDark?(55+Math.random()*30):(50+Math.random()*25);
+    const light=isDark?(60+Math.random()*25):(78+Math.random()*14);
+    const alpha=isDark?(0.2+Math.random()*0.45):(0.3+Math.random()*0.5);
+    p.style.cssText=`left:${Math.random()*100}vw;animation-duration:${5+Math.random()*8}s;animation-delay:${Math.random()*4}s;width:${5+Math.random()*7}px;height:${6+Math.random()*8}px;transform:rotate(${Math.random()*360}deg);background:hsla(${hue},${sat}%,${light}%,${alpha})`;
+    document.body.appendChild(p);
+    setTimeout(()=>p.remove(),15000);
+  }
+  setInterval(c,600);
+}
+
+// ── ANIMATED BACKGROUND ──
+(function(){
+  const mainCanvas=document.getElementById('bgCanvas');
+  const mainCtx=mainCanvas.getContext('2d');
+  let W,H,t=0;
+  const branches=[];
+
+  function makeBranch(x,y,angle,len,depth){
+    if(depth<=0||len<6) return;
+    const ex=x+Math.cos(angle)*len,ey=y+Math.sin(angle)*len;
+    branches.push({x1:x,y1:y,x2:ex,y2:ey,depth,len,phase:Math.random()*Math.PI*2});
+    const spread=0.35+depth*0.04;
+    makeBranch(ex,ey,angle-spread*(0.7+Math.random()*0.3),len*0.68,depth-1);
+    makeBranch(ex,ey,angle+spread*(0.7+Math.random()*0.3),len*0.65,depth-1);
+    if(depth>3&&Math.random()>.5) makeBranch(ex,ey,angle+(Math.random()-.5)*0.5,len*0.5,depth-2);
+  }
+
+  const blossoms=[];
+  let _gradientsValid=false;
+  let _gPink=null,_gWhite=null;
+  function seedBlossoms(){
+    blossoms.length=0;
+    branches.forEach(b=>{
+      if(b.len<28){
+        // Ограничиваем общее количество цветков до 200
+        if(blossoms.length>=200) return;
+        const count=Math.floor(2+Math.random()*3); // было 2-5, стало 2-4
+        for(let k=0;k<count&&blossoms.length<200;k++){
+          const scatter=b.len*0.8;
+          const rnd=Math.random();
+          const r=rnd<0.6?(3+Math.random()*3):(6+Math.random()*5);
+          blossoms.push({
+            x:b.x2+(Math.random()-.5)*scatter,
+            y:b.y2+(Math.random()-.5)*scatter,
+            r, phase:Math.random()*Math.PI*2,
+            speed:0.3+Math.random()*0.5,
+            pink:Math.random()>.3
+          });
+        }
+      }
+    });
+    // Кешируем градиенты после построения
+    _gradientsValid=false;
+  }
+
+  function buildGradientCache(ctx){
+    _gPink=ctx.createRadialGradient(0,0,0,0,0,1);
+    _gPink.addColorStop(0,'hsla(338,65%,72%,0.9)');
+    _gPink.addColorStop(0.45,'hsla(338,55%,76%,0.7)');
+    _gPink.addColorStop(0.8,'hsla(335,45%,82%,0.3)');
+    _gPink.addColorStop(1,'transparent');
+    _gWhite=ctx.createRadialGradient(0,0,0,0,0,1);
+    _gWhite.addColorStop(0,'hsla(330,30%,88%,0.85)');
+    _gWhite.addColorStop(0.5,'hsla(330,25%,90%,0.5)');
+    _gWhite.addColorStop(1,'transparent');
+    _gradientsValid=true;
+  }
+
+  function buildTree(){
+    branches.length=0;
+    makeBranch(W*0.08,H*1.05,-Math.PI/2+0.18,H*0.32,9);
+    makeBranch(W*1.0,H*0.55,-Math.PI+0.3,W*0.22,6);
+    seedBlossoms();
+  }
+
+  // Кешируем DOM-запросы
+  let _innerCanvas=null;
+  let _innerCtx=null;
+
+  function drawLight(ctx){
+    ctx.fillStyle='#f5ede6';ctx.fillRect(0,0,W,H);
+
+    // Туман — 3 радиальных градиента
+    const mists=[
+      {x:.5,y:.35,rx:.9,c:'rgba(255,245,248,0.55)',speed:.6},
+      {x:.15,y:.6,rx:.55,c:'rgba(240,235,248,0.45)',speed:.4},
+      {x:.82,y:.2,rx:.5,c:'rgba(255,240,245,0.5)',speed:.5}
+    ];
+    mists.forEach((m,i)=>{
+      const mx=m.x*W+Math.sin(t*m.speed*0.4+i)*W*0.025;
+      const my=m.y*H+Math.cos(t*m.speed*0.3+i*0.7)*H*0.02;
+      const rad=m.rx*Math.min(W,H);
+      ctx.save();ctx.translate(mx,my);ctx.scale(1,0.45);
+      const g=ctx.createRadialGradient(0,0,0,0,0,rad);
+      g.addColorStop(0,m.c);g.addColorStop(1,'transparent');
+      ctx.fillStyle=g;ctx.beginPath();ctx.arc(0,0,rad,0,Math.PI*2);ctx.fill();
+      ctx.restore();
+    });
+
+    // Ветки — убираем save/restore, используем setTransform
+    branches.forEach(b=>{
+      const sway=Math.sin(t*0.5+b.phase)*0.8*(1/(b.depth+1))*0.015;
+      const cos=Math.cos(sway),sin=Math.sin(sway);
+      ctx.setTransform(cos,-sin,sin,cos,b.x1,b.y1);
+      ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(b.x2-b.x1,b.y2-b.y1);
+      ctx.lineWidth=Math.max(0.5,b.depth*0.55);
+      ctx.strokeStyle=`rgba(80,50,40,${Math.min(0.18+b.depth*0.04,0.55)})`;
+      ctx.stroke();
+    });
+    ctx.setTransform(1,0,0,1,0,0);
+
+    // Цветки — два шаблонных градиента, масштабируем через setTransform
+    if(!_gradientsValid) buildGradientCache(ctx);
+    blossoms.forEach(bl=>{
+      const sway=Math.sin(t*0.35+bl.phase)*2;
+      const cx=bl.x+sway, cy=bl.y;
+      const r=bl.r*(0.9+Math.sin(t*bl.speed+bl.phase)*0.08);
+      ctx.setTransform(r,0,0,r,cx,cy);
+      ctx.fillStyle=bl.pink?_gPink:_gWhite;
+      ctx.beginPath();ctx.arc(0,0,1,0,Math.PI*2);ctx.fill();
+    });
+    ctx.setTransform(1,0,0,1,0,0);
+  }
+
+  function drawDark(ctx){
+    ctx.fillStyle='#000';ctx.fillRect(0,0,W,H);
+    const glow=ctx.createRadialGradient(W*.5,H,0,W*.5,H,H*.6);
+    glow.addColorStop(0,'rgba(232,48,106,0.07)');glow.addColorStop(1,'transparent');
+    ctx.fillStyle=glow;ctx.fillRect(0,0,W,H);
+    for(let i=0;i<30;i++){
+      const sx=((Math.sin(i*137.5)*.5+.5)*W+Math.sin(t*.25+i)*30)%W;
+      const sy=((Math.cos(i*137.5)*.5+.5)*H+Math.cos(t*.3+i)*20)%H;
+      const sa=0.15+Math.abs(Math.sin(t*.7+i*.6))*.35;
+      ctx.fillStyle=i%3===0?`rgba(232,48,106,${sa})`:`rgba(255,255,255,${sa*.6})`;
+      ctx.beginPath();ctx.arc(sx,sy,0.4+Math.abs(Math.sin(t*1.2+i))*1.0,0,Math.PI*2);ctx.fill();
+    }
+  }
+
+  function resize(){
+    W=window.innerWidth;H=window.innerHeight;
+    mainCanvas.width=W;mainCanvas.height=H;
+    _innerCanvas=document.getElementById('bgCanvasInner');
+    if(_innerCanvas){ _innerCanvas.width=W;_innerCanvas.height=H;_innerCtx=_innerCanvas.getContext('2d'); }
+    _gradientsValid=false;
+    buildTree();
+  }
+
+  // Фоновую анимацию ограничиваем 30fps — незаметно для глаза, вдвое меньше нагрузки
+  let _lastFrame=0;
+  const BG_FPS=30;
+  const BG_INTERVAL=1000/BG_FPS;
+
+  // Останавливаем анимацию когда вкладка скрыта
+  let _paused=false;
+  document.addEventListener('visibilitychange',()=>{ _paused=document.hidden; });
+
+  function draw(now){
+    requestAnimationFrame(draw);
+    if(_paused) return;
+    if(now-_lastFrame<BG_INTERVAL) return;
+    _lastFrame=now;
+    t+=0.012; // удваиваем шаг т.к. рисуем вдвое реже
+
+    const isDark=document.documentElement.getAttribute('data-theme')==='dark';
+    mainCtx.clearRect(0,0,W,H);
+    if(isDark) drawDark(mainCtx); else drawLight(mainCtx);
+
+    // Зеркалим на inner canvas только в светлой теме без видео
+    if(_innerCanvas&&!isDark){
+      const hasVideo=document.getElementById('videoArea')?.classList.contains('has-video');
+      _innerCanvas.style.opacity=hasVideo?'0':'1';
+      if(!hasVideo&&_innerCtx){
+        _innerCtx.clearRect(0,0,W,H);
+        _innerCtx.drawImage(mainCanvas,0,0);
+      }
+    } else if(_innerCanvas){
+      _innerCanvas.style.opacity='0';
+    }
+  }
+
+  window.addEventListener('resize',resize);
+  resize();
+  requestAnimationFrame(draw);
+})();
+
+</script>
+</body>
+</html>
