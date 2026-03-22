@@ -25,6 +25,7 @@
   --text-faint: rgba(90,53,48,0.3); --accent: #c07060; --accent2: #7a5548;
   --surface: rgba(255,250,247,0.6); --surface2: rgba(255,252,250,0.55);
   --surface3: rgba(248,240,235,0.9); --surface4: rgba(242,232,226,0.93);
+  --surface-solid: #f0e8e2;
   --surface-modal: rgba(252,246,242,0.97);
   --border: rgba(180,140,130,0.2); --border2: rgba(180,140,130,0.15);
   --border-accent: rgba(180,130,115,0.3);
@@ -42,6 +43,7 @@
   --text-faint: rgba(200,200,200,0.28); --accent: #e8306a; --accent2: #c02255;
   --surface: rgba(18,18,18,0.85); --surface2: rgba(14,14,14,0.75);
   --surface3: rgba(12,12,12,0.95); --surface4: rgba(8,8,8,0.97);
+  --surface-solid: #0d0d0d;
   --surface-modal: rgba(15,15,15,0.98);
   --border: rgba(255,255,255,0.08); --border2: rgba(255,255,255,0.05);
   --border-accent: rgba(232,48,106,0.25);
@@ -217,7 +219,7 @@ body { background: var(--bg-base); color: var(--text); font-family: 'Cormorant G
 #app:-webkit-full-screen .fs-chat {
   display:flex!important;flex-direction:column!important;
   width:280px!important;flex-shrink:0!important;height:100%!important;
-  background:var(--surface3)!important;
+  background:var(--surface-solid)!important;
   border-left:1px solid var(--border)!important;
   overflow:hidden!important;
 }
