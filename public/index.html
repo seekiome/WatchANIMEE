@@ -1995,16 +1995,19 @@ function spawnPetals(){
   function seedBlossoms(){
     blossoms.length=0;
     branches.forEach(b=>{
-      if(b.depth<=3){
-        const count=Math.floor(2+Math.random()*3);
+      if(b.len<28){
+        const count=Math.floor(2+Math.random()*5);
         for(let k=0;k<count;k++){
+          const scatter=b.len*0.8;
+          const rnd=Math.random();
+          const r=rnd<0.6?(3+Math.random()*3):(6+Math.random()*5);
           blossoms.push({
-            x:b.x2+(Math.random()-.5)*16,
-            y:b.y2+(Math.random()-.5)*16,
-            r:3+Math.random()*4,
+            x:b.x2+(Math.random()-.5)*scatter,
+            y:b.y2+(Math.random()-.5)*scatter,
+            r,
             phase:Math.random()*Math.PI*2,
-            speed:0.3+Math.random()*0.4,
-            pink:Math.random()>.2
+            speed:0.3+Math.random()*0.5,
+            pink:Math.random()>.3
           });
         }
       }
@@ -2012,14 +2015,9 @@ function spawnPetals(){
   }
   function buildTree(){
     branches.length=0;
-    blossoms.length=0;
     makeBranch(W*0.08,H*1.05,-Math.PI/2+0.18,H*0.32,9);
     seedBlossoms();
   }
-
-  // При смене темы перестраиваем дерево
-  const _themeObserver=new MutationObserver(()=>buildTree());
-  _themeObserver.observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
   function drawLight(ctx){
     ctx.fillStyle='#f5ede6';ctx.fillRect(0,0,W,H);
     const mists=[{x:.5,y:.35,rx:.9,ry:.45,c:'rgba(255,245,248,0.55)',speed:.6},{x:.15,y:.6,rx:.55,ry:.35,c:'rgba(240,235,248,0.45)',speed:.4},{x:.82,y:.2,rx:.5,ry:.3,c:'rgba(255,240,245,0.5)',speed:.5}];
@@ -2038,20 +2036,23 @@ function spawnPetals(){
       ctx.strokeStyle=`rgba(80,50,40,${Math.min(0.18+b.depth*0.04,0.55)})`;
       ctx.stroke();ctx.restore();
     });
-    // Цветки — простые круги, без градиентов
     blossoms.forEach(bl=>{
-      const r=bl.r*(0.88+Math.sin(t*bl.speed+bl.phase)*0.12);
-      const sway=Math.sin(t*0.4+bl.phase)*2.5;
+      const r=bl.r*(0.9+Math.sin(t*bl.speed+bl.phase)*0.08);
+      const sway=Math.sin(t*0.35+bl.phase)*2;
       const cx=bl.x+sway, cy=bl.y;
-      ctx.beginPath();
-      ctx.arc(cx,cy,r,0,Math.PI*2);
-      ctx.fillStyle=bl.pink?'rgba(225,120,155,0.82)':'rgba(255,215,228,0.75)';
-      ctx.fill();
-      // маленький светлый центр
-      ctx.beginPath();
-      ctx.arc(cx,cy,r*0.3,0,Math.PI*2);
-      ctx.fillStyle='rgba(255,245,200,0.9)';
-      ctx.fill();
+      const g=ctx.createRadialGradient(cx,cy,0,cx,cy,r);
+      if(bl.pink){
+        g.addColorStop(0,'hsla(338,65%,72%,0.9)');
+        g.addColorStop(0.45,'hsla(338,55%,76%,0.7)');
+        g.addColorStop(0.8,'hsla(335,45%,82%,0.3)');
+        g.addColorStop(1,'transparent');
+      } else {
+        g.addColorStop(0,'hsla(330,30%,88%,0.85)');
+        g.addColorStop(0.5,'hsla(330,25%,90%,0.5)');
+        g.addColorStop(1,'transparent');
+      }
+      ctx.beginPath();ctx.arc(cx,cy,r,0,Math.PI*2);
+      ctx.fillStyle=g;ctx.fill();
     });
   }
   function drawDark(ctx){
@@ -2074,36 +2075,29 @@ function spawnPetals(){
     if(inner){inner.width=W;inner.height=H;}
     buildTree();
   }
-  let _lastFrame=0;
-  let _paused=false;
-  document.addEventListener('visibilitychange',()=>{ _paused=document.hidden; });
-
-  function draw(now){
-    requestAnimationFrame(draw);
-    if(_paused) return;
-    // Фон не нужен когда открыто приложение
-    const appOpen=document.getElementById('app').style.display==='flex';
-    if(appOpen) return;
-    // 30 fps для фона
-    if(now-_lastFrame<33) return;
-    _lastFrame=now;
-
+  function draw(){
+    t+=0.006;
     const isDark=document.documentElement.getAttribute('data-theme')==='dark';
-    t+=0.012;
     mainCtx.clearRect(0,0,W,H);
     if(isDark) drawDark(mainCtx); else drawLight(mainCtx);
-
-    // При тёмной теме — чистим inner canvas полностью
-    const inner2=document.getElementById('bgCanvasInner');
-    if(inner2&&isDark){
-      inner2.style.opacity='0';
-      inner2.getContext('2d').clearRect(0,0,W,H);
+    const inner=document.getElementById('bgCanvasInner');
+    if(inner){
+      const appOpen=document.getElementById('app').style.display==='flex';
+      const hasVideo=document.getElementById('videoArea')?.classList.contains('has-video');
+      if(!isDark&&!hasVideo&&!appOpen){
+        inner.style.opacity='1';
+        const ictx=inner.getContext('2d');
+        ictx.clearRect(0,0,W,H);
+        ictx.drawImage(mainCanvas,0,0);
+      } else {
+        inner.style.opacity='0';
+        inner.getContext('2d').clearRect(0,0,W,H);
+      }
     }
-
+    requestAnimationFrame(draw);
   }
   window.addEventListener('resize',resize);
-  resize();
-  requestAnimationFrame(draw);
+  resize();draw();
 })();
 
 </script>
