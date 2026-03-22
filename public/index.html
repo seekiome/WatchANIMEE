@@ -74,7 +74,18 @@ body { background: var(--bg-base); color: var(--text); font-family: 'Cormorant G
 #lobby { width:100%;height:100dvh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:2rem;position:relative;z-index:2;overflow-y:auto; }
 .lobby-logo { font-family:'Noto Serif JP',serif;font-size:clamp(2rem,5vw,3rem);font-weight:300;color:var(--logo-color);letter-spacing:.12em;margin-bottom:2.5rem;text-align:center; }
 .lobby-card { background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:2rem;width:100%;max-width:380px;backdrop-filter:blur(12px);box-shadow:0 8px 40px rgba(0,0,0,0.08); }
-.tabs { display:flex;gap:.4rem;background:var(--tab-bg);padding:.3rem;border-radius:12px;margin-bottom:1.75rem; }
+/* панели лобби */
+.lobby-panel { display:none;flex-direction:column;gap:0; }
+.lobby-panel.active { display:flex; }
+.lobby-panel-title { font-family:'Cormorant Garamond',serif;font-size:1.15rem;color:var(--logo-color);letter-spacing:.06em;margin-bottom:1.5rem;text-align:center; }
+/* разделитель с текстом */
+.lobby-divider { display:flex;align-items:center;gap:.6rem;margin:1rem 0; }
+.lobby-divider::before,.lobby-divider::after { content:'';flex:1;height:1px;background:var(--border); }
+.lobby-divider span { font-size:.65rem;color:var(--text-faint);font-family:monospace;letter-spacing:.08em;white-space:nowrap; }
+/* вторичная кнопка (outlined) */
+.lobby-btn-ghost { width:100%;padding:.75rem;border:1px solid var(--border);border-radius:12px;background:transparent;color:var(--text-muted);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:.88rem;letter-spacing:.04em;cursor:pointer;transition:all .2s;display:flex;align-items:center;justify-content:center;gap:.5rem;line-height:1; }
+.lobby-btn-ghost:hover { border-color:var(--border-accent);color:var(--logo-color);background:var(--btn-bg); }
+.tabs { display:flex;gap:.4rem;background:var(--tab-bg);padding:.3rem;border-radius:12px;margin-bottom:1.5rem; }
 .tab { flex:1;padding:.6rem;border:none;border-radius:9px;background:transparent;color:var(--text-muted);font-family:'Cormorant Garamond',serif;font-size:.92rem;letter-spacing:.05em;cursor:pointer;transition:all .2s; }
 .tab.active { background:var(--btn-active-bg);border:1px solid var(--border-accent);color:var(--logo-color); }
 .field-label { display:block;font-size:.68rem;color:var(--text-muted);letter-spacing:.12em;text-transform:uppercase;font-family:'Cormorant Garamond',serif;margin-bottom:.4rem; }
@@ -84,10 +95,6 @@ body { background: var(--bg-base); color: var(--text); font-family: 'Cormorant G
 .lobby-btn { width:100%;padding:.85rem;border:1px solid var(--border-accent);border-radius:12px;background:var(--btn-bg);color:var(--logo-color);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:.95rem;letter-spacing:.05em;cursor:pointer;transition:all .2s;display:flex;align-items:center;justify-content:center;gap:.5rem;line-height:1; }
 .lobby-btn:hover { background:var(--btn-bg-hover);transform:translateY(-1px); }
 .lobby-btn:disabled { opacity:.5;cursor:not-allowed;transform:none; }
-
-/* Auth section */
-.auth-section { margin-top:1.25rem;border-top:1px solid var(--border);padding-top:1.1rem; }
-.auth-row { display:flex;gap:.4rem;margin-bottom:.6rem; }
 .auth-status { font-size:.72rem;font-family:monospace;color:var(--accent);text-align:center;padding:.3rem 0; }
 .auth-user-info { display:flex;align-items:center;gap:.5rem;justify-content:center;margin-bottom:.75rem; }
 .auth-avatar { font-size:1.2rem; }
@@ -441,52 +448,127 @@ video::-webkit-media-controls-start-playback-button { display:none!important; }
 <div id="lobby">
   <div class="lobby-logo">Watch Together</div>
   <div class="lobby-card">
-    <div class="tabs">
-      <button class="tab active" onclick="switchTab('host')" id="tabHost">Host</button>
-      <button class="tab" onclick="switchTab('join')" id="tabJoin">Join</button>
-    </div>
-    <div id="hostTab">
-      <label class="field-label" id="labelNameHost">Your name</label>
-      <input type="text" class="field-input" id="hostName" maxlength="24">
-      <button class="lobby-btn" onclick="createRoom()" id="btnCreate">
-        <span id="btnCreateText">Create room</span>
-        <svg width="1em" height="1em" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8h9M8 4l4 4-4 4"/></svg>
-      </button>
-    </div>
-    <div id="joinTab" style="display:none">
-      <label class="field-label" id="labelNameJoin">Your name</label>
-      <input type="text" class="field-input" id="joinName" maxlength="24">
-      <label class="field-label" id="labelCode">Room code</label>
-      <input type="text" class="field-input" id="joinCode" maxlength="8" style="text-transform:uppercase;letter-spacing:.12em;font-family:monospace">
-      <button class="lobby-btn" onclick="joinRoom()" id="btnJoin">
-        <span id="btnJoinText">Enter room</span>
-        <svg width="1em" height="1em" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8h9M8 4l4 4-4 4"/></svg>
-      </button>
-    </div>
-    <div class="auth-section" id="authSection">
-      <div id="authLoginForm">
-        <div id="authUserInfo" class="auth-user-info" style="display:none">
-          <span class="auth-avatar" id="authAvatarDisplay"></span>
-          <span class="auth-username" id="authUsernameDisplay"></span>
-          <button class="auth-logout-btn" onclick="logout()" id="authLogoutBtn">Sign out</button>
-        </div>
-        <div id="authFormFields">
-          <div class="auth-row">
-            <input type="text" class="field-input" id="authUsername" maxlength="24" style="margin-bottom:0" placeholder="Username">
-            <input type="password" class="field-input" id="authPassword" maxlength="64" style="margin-bottom:0" placeholder="Password">
-          </div>
-          <div class="auth-row" style="margin-top:.5rem">
-            <button class="lobby-btn" onclick="authLogin()" id="authLoginBtn" style="padding:.65rem">
-              <span id="authLoginText">Sign in</span>
-            </button>
-            <button class="lobby-btn" onclick="authRegister()" id="authRegisterBtn" style="padding:.65rem">
-              <span id="authRegisterText">Register</span>
-            </button>
-          </div>
-          <div class="auth-status" id="authStatus"></div>
-        </div>
+
+    <!-- ══ ПАНЕЛЬ: ВОЙТИ ══ -->
+    <div class="lobby-panel active" id="panelLogin">
+      <!-- Залогиненный пользователь -->
+      <div id="authUserInfo" class="auth-user-info" style="display:none">
+        <span class="auth-avatar" id="authAvatarDisplay"></span>
+        <span class="auth-username" id="authUsernameDisplay"></span>
+        <button class="auth-logout-btn" onclick="logout()" id="authLogoutBtn">Sign out</button>
       </div>
+      <!-- Баннер верификации -->
+      <div id="verifyBanner" style="display:none;background:rgba(192,112,96,0.12);border:1px solid rgba(192,112,96,0.3);border-radius:10px;padding:.6rem .85rem;margin-bottom:.75rem;font-size:.72rem;font-family:monospace;color:var(--accent2);align-items:center;justify-content:space-between;gap:.5rem">
+        <span id="verifyBannerText">Confirm your email</span>
+        <button onclick="resendVerification()" style="background:none;border:none;cursor:pointer;font-size:.68rem;color:var(--accent);font-family:monospace;text-decoration:underline;white-space:nowrap" id="resendBtn">Resend</button>
+      </div>
+      <!-- Форма входа -->
+      <div id="loginFormFields">
+        <input type="text" class="field-input" id="authUsername" maxlength="24" placeholder="Username" autocomplete="username">
+        <input type="password" class="field-input" id="authPassword" maxlength="64" placeholder="Password" autocomplete="current-password" onkeydown="if(event.key==='Enter')authLogin()">
+        <button class="lobby-btn" onclick="authLogin()" id="authLoginBtn">
+          <span id="authLoginText">Sign in</span>
+          <svg width="1em" height="1em" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8h9M8 4l4 4-4 4"/></svg>
+        </button>
+        <div style="text-align:center;margin-top:.5rem">
+          <button onclick="showForgotPassword()" style="background:none;border:none;cursor:pointer;font-size:.68rem;color:var(--text-faint);font-family:monospace;text-decoration:underline">Forgot password?</button>
+        </div>
+        <div class="auth-status" id="authStatus"></div>
+      </div>
+      <div class="lobby-divider"><span>or</span></div>
+      <button class="lobby-btn-ghost" onclick="showPanel('panelRegister')">
+        <svg width="1em" height="1em" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="5" r="3"/><path d="M1 14s1-4 7-4 7 4 7 4"/><line x1="13" y1="3" x2="13" y2="7"/><line x1="11" y1="5" x2="15" y2="5"/></svg>
+        <span id="btnGoRegister">Create account</span>
+      </button>
+      <button class="lobby-btn-ghost" style="margin-top:.5rem" onclick="showPanel('panelGuest')">
+        <svg width="1em" height="1em" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="5" r="3"/><path d="M1 14s1-4 7-4 7 4 7 4"/></svg>
+        <span id="btnGoGuest">Continue as guest</span>
+      </button>
     </div>
+
+    <!-- ══ ПАНЕЛЬ: ЗАРЕГИСТРИРОВАТЬСЯ ══ -->
+    <div class="lobby-panel" id="panelRegister">
+      <div class="lobby-panel-title" id="panelRegisterTitle">Create account</div>
+      <input type="text" class="field-input" id="regUsername" maxlength="24" placeholder="Username" autocomplete="username">
+      <input type="password" class="field-input" id="regPassword" maxlength="64" placeholder="Password (min 6 chars)" autocomplete="new-password">
+      <input type="email" class="field-input" id="regEmail" maxlength="128" placeholder="Email (optional, for password reset)" autocomplete="email">
+      <button class="lobby-btn" onclick="authRegister()" id="authRegisterBtn">
+        <span id="authRegisterText">Register</span>
+        <svg width="1em" height="1em" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8h9M8 4l4 4-4 4"/></svg>
+      </button>
+      <div class="auth-status" id="authRegisterStatus"></div>
+      <div class="lobby-divider"><span>or</span></div>
+      <button class="lobby-btn-ghost" onclick="showPanel('panelLogin')">
+        <svg width="1em" height="1em" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10 8H2M6 4l-4 4 4 4"/></svg>
+        <span id="btnBackToLogin">Already have account? Sign in</span>
+      </button>
+      <button class="lobby-btn-ghost" style="margin-top:.5rem" onclick="showPanel('panelGuest')">
+        <svg width="1em" height="1em" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="5" r="3"/><path d="M1 14s1-4 7-4 7 4 7 4"/></svg>
+        <span id="btnGoGuest2">Continue as guest</span>
+      </button>
+    </div>
+
+    <!-- ══ ПАНЕЛЬ: ГОСТЬ ══ -->
+    <div class="lobby-panel" id="panelGuest">
+      <div class="lobby-panel-title" id="panelGuestTitle">Guest mode</div>
+      <div class="tabs">
+        <button class="tab active" onclick="switchTab('host')" id="tabHost">Host</button>
+        <button class="tab" onclick="switchTab('join')" id="tabJoin">Join</button>
+      </div>
+      <div id="hostTab">
+        <label class="field-label" id="labelNameHost">Your name</label>
+        <input type="text" class="field-input" id="hostName" maxlength="24">
+        <button class="lobby-btn" onclick="createRoom()" id="btnCreate">
+          <span id="btnCreateText">Create room</span>
+          <svg width="1em" height="1em" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8h9M8 4l4 4-4 4"/></svg>
+        </button>
+      </div>
+      <div id="joinTab" style="display:none">
+        <label class="field-label" id="labelNameJoin">Your name</label>
+        <input type="text" class="field-input" id="joinName" maxlength="24">
+        <label class="field-label" id="labelCode">Room code</label>
+        <input type="text" class="field-input" id="joinCode" maxlength="8" style="text-transform:uppercase;letter-spacing:.12em;font-family:monospace">
+        <button class="lobby-btn" onclick="joinRoom()" id="btnJoin">
+          <span id="btnJoinText">Enter room</span>
+          <svg width="1em" height="1em" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8h9M8 4l4 4-4 4"/></svg>
+        </button>
+      </div>
+      <div class="lobby-divider"><span>or</span></div>
+      <button class="lobby-btn-ghost" onclick="showPanel('panelLogin')">
+        <svg width="1em" height="1em" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10 8H2M6 4l-4 4 4 4"/></svg>
+        <span id="btnBackToLogin2">Sign in</span>
+      </button>
+      <button class="lobby-btn-ghost" style="margin-top:.5rem" onclick="showPanel('panelRegister')">
+        <svg width="1em" height="1em" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="5" r="3"/><path d="M1 14s1-4 7-4 7 4 7 4"/><line x1="13" y1="3" x2="13" y2="7"/><line x1="11" y1="5" x2="15" y2="5"/></svg>
+        <span id="btnGoRegister2">Create account</span>
+      </button>
+    </div>
+
+  </div>
+</div>
+
+<!-- Модалка сброса пароля -->
+<div class="modal-overlay" id="forgotModal" onclick="if(event.target===this)closeForgotModal()">
+  <div class="modal">
+    <div class="modal-title" id="forgotTitle">Forgot password</div>
+    <div class="modal-sub" id="forgotSub">// enter your email to reset</div>
+    <!-- Шаг 1: ввод email -->
+    <div id="forgotStep1">
+      <input type="email" class="field-input" id="forgotEmail" placeholder="your@email.com" maxlength="128" onkeydown="if(event.key==='Enter')submitForgot()">
+      <button class="lobby-btn" onclick="submitForgot()" style="margin-bottom:.75rem" id="forgotSubmitBtn">
+        <span id="forgotSubmitText">Send reset link</span>
+      </button>
+    </div>
+    <!-- Шаг 2: новый пароль (открывается по ?reset= в URL) -->
+    <div id="forgotStep2" style="display:none">
+      <input type="password" class="field-input" id="newPassword" placeholder="New password (min 6 chars)" maxlength="64" onkeydown="if(event.key==='Enter')submitReset()">
+      <input type="password" class="field-input" id="newPasswordConfirm" placeholder="Confirm password" maxlength="64" onkeydown="if(event.key==='Enter')submitReset()">
+      <button class="lobby-btn" onclick="submitReset()" style="margin-bottom:.75rem">
+        <span>Set new password</span>
+      </button>
+    </div>
+    <div class="auth-status" id="forgotStatus"></div>
+    <button class="modal-close" onclick="closeForgotModal()"><span>Close</span></button>
   </div>
 </div>
 
@@ -679,16 +761,18 @@ const T = {
     authSignIn:'Sign in', authRegister:'Register',
     addFriend:'Add by username…', fpAdd:'Add',
     fpTitle:'Friends', fpRequestsLabel:'Requests', fpFriendsLabel:'Friends',
-    waitingHost:'Waiting for host video…',
-    waitRecv:'Receiving video…',
+    waitingHost:'Waiting for host video…', waitRecv:'Receiving video…',
     joined:(n,h)=>`${n} joined${h?' (host)':''}`,
     videoSelected:'Video uploaded — streaming to friends',
-    hostLeft:'Host left the room',
-    disconnected:'Connection lost',
+    hostLeft:'Host left the room', disconnected:'Connection lost',
     videoReceived:'Video ready — syncing with host',
     authLogout:'Sign out',
     noFriends:'No friends yet.\nAdd someone by username above.',
     syncingMsg:'Syncing playback…',
+    panelRegister:'Create account', panelGuest:'Guest mode',
+    goRegister:'Create account', goGuest:'Continue as guest',
+    backLogin:'Already have account? Sign in', backLogin2:'Sign in',
+    verifyBanner:'Confirm your email', resend:'Resend',
   },
   ru: {
     tabHost:'Хост', tabJoin:'Войти',
@@ -700,19 +784,21 @@ const T = {
     modalTitle:'Пригласить друзей', modalSub:'// поделись ссылкой или кодом',
     orCode:'или код комнаты', copyBtn:'Копировать', copyDone:'✓ Скопировано', modalClose:'Закрыть',
     homeTitle:'Главная', inviteTitle:'Пригласить',
-    authSignIn:'Войти', authRegister:'Регистрация',
+    authSignIn:'Войти', authRegister:'Зарегистрироваться',
     addFriend:'Добавить по нику…', fpAdd:'Добавить',
     fpTitle:'Друзья', fpRequestsLabel:'Заявки', fpFriendsLabel:'Друзья',
-    waitingHost:'Ожидание видео от хоста…',
-    waitRecv:'Получение видео…',
+    waitingHost:'Ожидание видео от хоста…', waitRecv:'Получение видео…',
     joined:(n,h)=>`${n} вошёл${h?' (хост)':''}`,
     videoSelected:'Видео загружено — передаётся друзьям',
-    hostLeft:'Хост покинул комнату',
-    disconnected:'Соединение прервано',
+    hostLeft:'Хост покинул комнату', disconnected:'Соединение прервано',
     videoReceived:'Видео готово — синхронизация с хостом',
     authLogout:'Выйти',
     noFriends:'Друзей пока нет.\nДобавь по нику выше.',
     syncingMsg:'Синхронизация…',
+    panelRegister:'Создать аккаунт', panelGuest:'Режим гостя',
+    goRegister:'Создать аккаунт', goGuest:'Продолжить как гость',
+    backLogin:'Уже есть аккаунт? Войти', backLogin2:'Войти',
+    verifyBanner:'Подтвердите email', resend:'Отправить снова',
   },
   uk: {
     tabHost:'Хост', tabJoin:'Увійти',
@@ -724,19 +810,21 @@ const T = {
     modalTitle:'Запросити друзів', modalSub:'// поділись посиланням або кодом',
     orCode:'або код кімнати', copyBtn:'Копіювати', copyDone:'✓ Скопійовано', modalClose:'Закрити',
     homeTitle:'Головна', inviteTitle:'Запросити',
-    authSignIn:'Увійти', authRegister:'Реєстрація',
+    authSignIn:'Увійти', authRegister:'Зареєструватись',
     addFriend:'Додати за ніком…', fpAdd:'Додати',
     fpTitle:'Друзі', fpRequestsLabel:'Запити', fpFriendsLabel:'Друзі',
-    waitingHost:'Очікування відео від хоста…',
-    waitRecv:'Отримання відео…',
+    waitingHost:'Очікування відео від хоста…', waitRecv:'Отримання відео…',
     joined:(n,h)=>`${n} увійшов${h?' (хост)':''}`,
     videoSelected:'Відео завантажено — передається друзям',
-    hostLeft:'Хост покинув кімнату',
-    disconnected:"З'єднання перервано",
+    hostLeft:'Хост покинув кімнату', disconnected:"З'єднання перервано",
     videoReceived:'Відео готово — синхронізація з хостом',
     authLogout:'Вийти',
     noFriends:"Друзів ще немає.\nДодай за ніком вище.",
     syncingMsg:'Синхронізація…',
+    panelRegister:'Створити акаунт', panelGuest:'Режим гостя',
+    goRegister:'Створити акаунт', goGuest:'Продовжити як гість',
+    backLogin:'Вже є акаунт? Увійти', backLogin2:'Увійти',
+    verifyBanner:'Підтвердіть email', resend:'Надіслати знову',
   },
   ja: {
     tabHost:'ホスト', tabJoin:'参加する',
@@ -751,16 +839,18 @@ const T = {
     authSignIn:'ログイン', authRegister:'登録',
     addFriend:'ユーザー名で追加…', fpAdd:'追加',
     fpTitle:'フレンド', fpRequestsLabel:'リクエスト', fpFriendsLabel:'フレンド',
-    waitingHost:'ホストの動画を待っています…',
-    waitRecv:'動画を受信中…',
+    waitingHost:'ホストの動画を待っています…', waitRecv:'動画を受信中…',
     joined:(n,h)=>`${n} として入室${h?' (ホスト)':''}`,
     videoSelected:'動画をアップロードしました — 送信中',
-    hostLeft:'ホストが退室しました',
-    disconnected:'接続が切断されました',
+    hostLeft:'ホストが退室しました', disconnected:'接続が切断されました',
     videoReceived:'動画の準備ができました — 同期中',
     authLogout:'ログアウト',
     noFriends:'まだフレンドがいません。\n上でユーザー名を追加してください。',
     syncingMsg:'同期中…',
+    panelRegister:'アカウント作成', panelGuest:'ゲストモード',
+    goRegister:'アカウントを作成', goGuest:'ゲストとして続ける',
+    backLogin:'アカウントをお持ちですか？ ログイン', backLogin2:'ログイン',
+    verifyBanner:'メールを確認してください', resend:'再送信',
   }
 };
 
@@ -778,35 +868,32 @@ function setLang(l){
   lang=l;
   document.querySelectorAll('.lang-btn').forEach((b,idx)=>b.classList.toggle('active',['en','ru','uk','ja'][idx]===l));
   const t=T[l];
-  document.getElementById('tabHost').textContent=t.tabHost;
-  document.getElementById('tabJoin').textContent=t.tabJoin;
-  document.getElementById('labelNameHost').textContent=t.labelNameHost;
-  document.getElementById('labelNameJoin').textContent=t.labelNameJoin;
-  document.getElementById('labelCode').textContent=t.labelCode;
-  document.getElementById('hostName').placeholder=t.hostNamePh;
-  document.getElementById('joinName').placeholder=t.joinNamePh;
-  document.getElementById('joinCode').placeholder=t.codePh;
-  document.getElementById('btnCreateText').textContent=t.btnCreate;
-  document.getElementById('btnJoinText').textContent=t.btnJoin;
-  document.getElementById('uploadTitle').textContent=t.uploadTitle;
-  document.getElementById('chatLabel').textContent=t.chatLabel;
-  document.getElementById('fsChatLabel').textContent=t.chatLabel;
-  document.getElementById('chatInput').placeholder=t.chatPh;
-  document.getElementById('modalTitle').textContent=t.modalTitle;
-  document.getElementById('modalSub').textContent=t.modalSub;
-  document.getElementById('orCode').textContent=t.orCode;
-  document.getElementById('copyBtnLabel').textContent=t.copyBtn;
-  document.getElementById('modalCloseText').textContent=t.modalClose;
-  document.getElementById('waitingText').textContent=t.waitingHost;
-  document.getElementById('addFriendInput').placeholder=t.addFriend;
-  document.getElementById('fpAddBtn').textContent=t.fpAdd;
-  document.getElementById('fpTitle').textContent=t.fpTitle;
-  document.getElementById('fpRequestsLabel').textContent=t.fpRequestsLabel;
-  document.getElementById('fpFriendsLabel').textContent=t.fpFriendsLabel;
-  document.getElementById('authLoginText').textContent=t.authSignIn;
-  document.getElementById('authRegisterText').textContent=t.authRegister;
-  if(document.getElementById('authLogoutBtn'))
-    document.getElementById('authLogoutBtn').textContent=t.authLogout;
+  const s=(id,v)=>{ const el=document.getElementById(id); if(el) el.textContent=v; };
+  const p=(id,v)=>{ const el=document.getElementById(id); if(el) el.placeholder=v; };
+  s('tabHost',t.tabHost); s('tabJoin',t.tabJoin);
+  s('labelNameHost',t.labelNameHost); s('labelNameJoin',t.labelNameJoin); s('labelCode',t.labelCode);
+  p('hostName',t.hostNamePh); p('joinName',t.joinNamePh); p('joinCode',t.codePh);
+  s('btnCreateText',t.btnCreate); s('btnJoinText',t.btnJoin);
+  s('uploadTitle',t.uploadTitle);
+  s('chatLabel',t.chatLabel); s('fsChatLabel',t.chatLabel);
+  p('chatInput',t.chatPh);
+  s('modalTitle',t.modalTitle); s('modalSub',t.modalSub);
+  s('orCode',t.orCode); s('copyBtnLabel',t.copyBtn); s('modalCloseText',t.modalClose);
+  s('waitingText',t.waitingHost);
+  p('addFriendInput',t.addFriend); s('fpAddBtn',t.fpAdd);
+  s('fpTitle',t.fpTitle); s('fpRequestsLabel',t.fpRequestsLabel); s('fpFriendsLabel',t.fpFriendsLabel);
+  s('authLoginText',t.authSignIn); s('authRegisterText',t.authRegister);
+  s('authLogoutBtn',t.authLogout);
+  // Панели
+  s('panelRegisterTitle',t.panelRegister||'Create account');
+  s('panelGuestTitle',t.panelGuest||'Guest mode');
+  s('btnGoRegister',t.goRegister||'Create account');
+  s('btnGoRegister2',t.goRegister||'Create account');
+  s('btnGoGuest',t.goGuest||'Continue as guest');
+  s('btnGoGuest2',t.goGuest||'Continue as guest');
+  s('btnBackToLogin',t.backLogin||'Already have account? Sign in');
+  s('btnBackToLogin2',t.backLogin2||'Sign in');
+  s('verifyBannerText',t.verifyBanner||'Confirm your email'); s('resendBtn',t.resend||'Resend');
 }
 
 // ── STATE ──
@@ -833,21 +920,33 @@ function rid(n=6){ return Math.random().toString(36).substr(2,n).toUpperCase(); 
   }
 })();
 
+function showPanel(id){
+  document.querySelectorAll('.lobby-panel').forEach(p=>p.classList.remove('active'));
+  const el=document.getElementById(id);
+  if(el) el.classList.add('active');
+}
+
 function updateAuthUI(){
-  const formFields = document.getElementById('authFormFields');
-  const userInfo = document.getElementById('authUserInfo');
+  const userInfo=document.getElementById('authUserInfo');
+  const loginFields=document.getElementById('loginFormFields');
   if(authUser){
-    formFields.style.display='none';
-    userInfo.style.display='flex';
-    document.getElementById('authAvatarDisplay').textContent=authAvatar||'🌸';
-    document.getElementById('authUsernameDisplay').textContent=authUser;
+    if(userInfo){ userInfo.style.display='flex'; }
+    if(loginFields){ loginFields.style.display='none'; }
+    // Залогиненный пользователь — сразу на гостевую панель (с вкладками)
+    showPanel('panelGuest');
+    // Заполняем имя
+    const hn=document.getElementById('hostName');
+    const jn=document.getElementById('joinName');
+    if(hn&&!hn.value) hn.value=authUser;
+    if(jn&&!jn.value) jn.value=authUser;
     document.getElementById('friendsBtn').style.display='flex';
     document.getElementById('userChip').style.display='flex';
     document.getElementById('userChipAvatar').textContent=authAvatar||'🌸';
     document.getElementById('userChipName').textContent=authUser;
   } else {
-    formFields.style.display='block';
-    userInfo.style.display='none';
+    if(userInfo){ userInfo.style.display='none'; }
+    if(loginFields){ loginFields.style.display='block'; }
+    showPanel('panelLogin');
     document.getElementById('friendsBtn').style.display='none';
     document.getElementById('userChip').style.display='none';
   }
@@ -867,29 +966,110 @@ async function authLogin(){
     localStorage.setItem('wt-auth',JSON.stringify({token:d.token,username:d.username,avatar:d.avatar}));
     setAuthStatus('');
     updateAuthUI();
-    document.getElementById('hostName').value=authUser;
-    document.getElementById('joinName').value=authUser;
+    if(d.emailVerified===false && d.email) showVerifyBanner();
   } catch { setAuthStatus('Network error'); }
 }
 
+let _resetToken = null;
+
 async function authRegister(){
-  const username=document.getElementById('authUsername').value.trim();
-  const password=document.getElementById('authPassword').value;
-  if(!username||!password) return setAuthStatus('Enter username and password');
-  if(password.length<6) return setAuthStatus('Password min 6 chars');
-  setAuthStatus('…');
+  const username=document.getElementById('regUsername').value.trim();
+  const password=document.getElementById('regPassword').value;
+  const email=document.getElementById('regEmail').value.trim()||undefined;
+  const st=document.getElementById('authRegisterStatus');
+  if(!username||!password){ st.textContent='Enter username and password'; return; }
+  if(password.length<6){ st.textContent='Password min 6 chars'; return; }
+  st.textContent='…';
   try {
-    const r=await fetch('/api/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,password})});
+    const r=await fetch('/api/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,password,email})});
     const d=await r.json();
-    if(r.status===429) return setAuthStatus('Too many attempts, try later');
-    if(!r.ok) return setAuthStatus(d.error||'Error');
+    if(r.status===429){ st.textContent='Too many attempts, try later'; return; }
+    if(!r.ok){ st.textContent=d.error||'Error'; return; }
     authToken=d.token; authUser=d.username; authAvatar=d.avatar;
     localStorage.setItem('wt-auth',JSON.stringify({token:d.token,username:d.username,avatar:d.avatar}));
-    setAuthStatus('');
+    st.textContent='';
     updateAuthUI();
-    document.getElementById('hostName').value=authUser;
-    document.getElementById('joinName').value=authUser;
-  } catch { setAuthStatus('Network error'); }
+    if(email) showVerifyBanner();
+    if(d.message) setAuthStatus(d.message);
+  } catch { st.textContent='Network error'; }
+}
+
+function showVerifyBanner(){
+  const b=document.getElementById('verifyBanner');
+  if(b){ b.style.display='flex'; }
+}
+
+async function resendVerification(){
+  if(!authToken) return;
+  const btn=document.getElementById('resendBtn');
+  btn.textContent='Sending…'; btn.disabled=true;
+  try {
+    await fetch('/api/resend-verification',{method:'POST',headers:{Authorization:`Bearer ${authToken}`}});
+    btn.textContent='Sent ✓';
+    setTimeout(()=>{ btn.textContent='Resend'; btn.disabled=false; },30000);
+  } catch { btn.textContent='Error'; btn.disabled=false; }
+}
+
+function showForgotPassword(){
+  // Если в URL есть ?reset= — сразу показываем шаг 2
+  const params=new URLSearchParams(location.search);
+  const rt=params.get('reset');
+  if(rt){ _resetToken=rt; showResetStep2(); }
+  else { showResetStep1(); }
+  document.getElementById('forgotModal').classList.add('open');
+}
+
+function showResetStep1(){
+  document.getElementById('forgotStep1').style.display='block';
+  document.getElementById('forgotStep2').style.display='none';
+  document.getElementById('forgotStatus').textContent='';
+}
+
+function showResetStep2(){
+  document.getElementById('forgotStep1').style.display='none';
+  document.getElementById('forgotStep2').style.display='block';
+  document.getElementById('forgotStatus').textContent='';
+}
+
+function closeForgotModal(){
+  document.getElementById('forgotModal').classList.remove('open');
+  document.getElementById('forgotStatus').textContent='';
+}
+
+async function submitForgot(){
+  const email=document.getElementById('forgotEmail').value.trim();
+  if(!email) return document.getElementById('forgotStatus').textContent='Enter your email';
+  const btn=document.getElementById('forgotSubmitBtn');
+  btn.disabled=true;
+  document.getElementById('forgotSubmitText').textContent='Sending…';
+  try {
+    await fetch('/api/forgot-password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email})});
+    document.getElementById('forgotStatus').textContent='If this email exists — check your inbox';
+    document.getElementById('forgotStep1').style.display='none';
+  } catch {
+    document.getElementById('forgotStatus').textContent='Network error';
+    btn.disabled=false;
+    document.getElementById('forgotSubmitText').textContent='Send reset link';
+  }
+}
+
+async function submitReset(){
+  const password=document.getElementById('newPassword').value;
+  const confirm=document.getElementById('newPasswordConfirm').value;
+  const st=document.getElementById('forgotStatus');
+  if(password.length<6) return st.textContent='Password min 6 chars';
+  if(password!==confirm) return st.textContent='Passwords do not match';
+  if(!_resetToken) return st.textContent='Invalid token';
+  try {
+    const r=await fetch('/api/reset-password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:_resetToken,password})});
+    const d=await r.json();
+    if(!r.ok) return st.textContent=d.error||'Error';
+    st.textContent='Password changed! You can now sign in.';
+    document.getElementById('forgotStep2').style.display='none';
+    // Чистим URL
+    history.replaceState(null,'',location.pathname);
+    _resetToken=null;
+  } catch { st.textContent='Network error'; }
 }
 
 function logout(){
@@ -899,7 +1079,7 @@ function logout(){
   updateAuthUI();
 }
 
-function setAuthStatus(msg){ document.getElementById('authStatus').textContent=msg; }
+function setAuthStatus(msg){ const el=document.getElementById('authStatus'); if(el) el.textContent=msg; }
 
 // ── LOBBY ──
 function switchTab(tab){
@@ -911,6 +1091,12 @@ function switchTab(tab){
 window.addEventListener('load',()=>{
   const p=new URLSearchParams(location.search);
   if(p.get('room')){ document.getElementById('joinCode').value=p.get('room'); switchTab('join'); }
+  // Автооткрытие модалки сброса пароля если в URL есть ?reset=
+  if(p.get('reset')){
+    _resetToken=p.get('reset');
+    showResetStep2();
+    document.getElementById('forgotModal').classList.add('open');
+  }
   setTheme(localStorage.getItem('wt-theme')||'dark');
   setLang('en');
   updateAuthUI();
