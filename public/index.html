@@ -1997,19 +1997,17 @@ function spawnPetals(){
   }
 
   const blossoms=[];
-  let _gradientsValid=false;
-  let _gPink=null,_gWhite=null;
+
   function seedBlossoms(){
     blossoms.length=0;
     branches.forEach(b=>{
       if(b.len<28){
-        // Ограничиваем общее количество цветков до 200
-        if(blossoms.length>=200) return;
-        const count=Math.floor(2+Math.random()*3); // было 2-5, стало 2-4
-        for(let k=0;k<count&&blossoms.length<200;k++){
+        if(blossoms.length>=180) return;
+        const count=Math.floor(2+Math.random()*4);
+        for(let k=0;k<count&&blossoms.length<180;k++){
           const scatter=b.len*0.8;
           const rnd=Math.random();
-          const r=rnd<0.6?(3+Math.random()*3):(6+Math.random()*5);
+          const r=rnd<0.6?(3+Math.random()*3):(5+Math.random()*5);
           blossoms.push({
             x:b.x2+(Math.random()-.5)*scatter,
             y:b.y2+(Math.random()-.5)*scatter,
@@ -2020,21 +2018,6 @@ function spawnPetals(){
         }
       }
     });
-    // Кешируем градиенты после построения
-    _gradientsValid=false;
-  }
-
-  function buildGradientCache(ctx){
-    _gPink=ctx.createRadialGradient(0,0,0,0,0,1);
-    _gPink.addColorStop(0,'hsla(338,65%,72%,0.9)');
-    _gPink.addColorStop(0.45,'hsla(338,55%,76%,0.7)');
-    _gPink.addColorStop(0.8,'hsla(335,45%,82%,0.3)');
-    _gPink.addColorStop(1,'transparent');
-    _gWhite=ctx.createRadialGradient(0,0,0,0,0,1);
-    _gWhite.addColorStop(0,'hsla(330,30%,88%,0.85)');
-    _gWhite.addColorStop(0.5,'hsla(330,25%,90%,0.5)');
-    _gWhite.addColorStop(1,'transparent');
-    _gradientsValid=true;
   }
 
   function buildTree(){
@@ -2044,7 +2027,6 @@ function spawnPetals(){
     seedBlossoms();
   }
 
-  // Кешируем DOM-запросы
   let _innerCanvas=null;
   let _innerCtx=null;
 
@@ -2080,17 +2062,24 @@ function spawnPetals(){
     });
     ctx.setTransform(1,0,0,1,0,0);
 
-    // Цветки — два шаблонных градиента, масштабируем через setTransform
-    if(!_gradientsValid) buildGradientCache(ctx);
+    // Цветки
     blossoms.forEach(bl=>{
+      const r=bl.r*(0.9+Math.sin(t*bl.speed+bl.phase)*0.08);
       const sway=Math.sin(t*0.35+bl.phase)*2;
       const cx=bl.x+sway, cy=bl.y;
-      const r=bl.r*(0.9+Math.sin(t*bl.speed+bl.phase)*0.08);
-      ctx.setTransform(r,0,0,r,cx,cy);
-      ctx.fillStyle=bl.pink?_gPink:_gWhite;
-      ctx.beginPath();ctx.arc(0,0,1,0,Math.PI*2);ctx.fill();
+      const g=ctx.createRadialGradient(cx,cy,0,cx,cy,r);
+      if(bl.pink){
+        g.addColorStop(0,'hsla(338,65%,72%,0.9)');
+        g.addColorStop(0.5,'hsla(336,50%,78%,0.6)');
+        g.addColorStop(1,'transparent');
+      } else {
+        g.addColorStop(0,'hsla(330,30%,88%,0.85)');
+        g.addColorStop(0.6,'hsla(330,25%,90%,0.4)');
+        g.addColorStop(1,'transparent');
+      }
+      ctx.beginPath();ctx.arc(cx,cy,r,0,Math.PI*2);
+      ctx.fillStyle=g;ctx.fill();
     });
-    ctx.setTransform(1,0,0,1,0,0);
   }
 
   function drawDark(ctx){
