@@ -709,7 +709,34 @@ app.get('/video-stream/:roomId', (req, res) => {
 });
 
 // ── HEALTH CHECK ──
-app.get('/health', (req, res) => res.json({ status: 'ok', uptime: process.uptime() }));
+app.get('/health', (req, res) => res.json({
+  status: 'ok',
+  uptime: Math.floor(process.uptime()),
+  rooms: Object.keys(rooms).length,
+  onlineUsers: onlineUsers.size
+}));
+
+// ── KEEP-ALIVE ──
+// Пингуем себя каждые 14 минут чтобы не засыпать на Railway/Render/Heroku.
+// Установи переменную окружения SELF_URL = https://your-app.railway.app
+const SELF_URL = process.env.SELF_URL
+  || process.env.RAILWAY_STATIC_URL
+  || process.env.RENDER_EXTERNAL_URL
+  || null;
+
+function selfPing() {
+  if (!SELF_URL) return;
+  const url = `${SELF_URL.replace(/\/$/, '')}/health`;
+  const lib = url.startsWith('https') ? require('https') : require('http');
+  const req = lib.get(url, res => {
+    console.log(`[keep-alive] ${new Date().toISOString()} → ${res.statusCode}`);
+  });
+  req.on('error', err => console.warn(`[keep-alive] failed: ${err.message}`));
+  req.end();
+}
+
+// Первый пинг через минуту после старта, затем каждые 14 минут
+setTimeout(() => { selfPing(); setInterval(selfPing, 14 * 60 * 1000); }, 60 * 1000);
 
 // ── STATIC ──
 app.get('/favicon.ico', (req, res) => res.sendFile(path.join(__dirname, 'public', 'favicon.ico')));
@@ -718,4 +745,8 @@ app.get('/favicon-16.png', (req, res) => res.sendFile(path.join(__dirname, 'publ
 app.use(express.static(path.join(__dirname, 'public')));
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, '0.0.0.0', () => console.log(`WatchTogether running on port ${PORT}`));
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`WatchTogether running on port ${PORT}`);
+  if (SELF_URL) console.log(`[keep-alive] enabled → ${SELF_URL}/health every 14 min`);
+  else console.log(`[keep-alive] set SELF_URL env var to prevent sleep`);
+});
