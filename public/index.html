@@ -636,23 +636,6 @@ video::-webkit-media-controls-start-playback-button { display:none!important; }
       <div class="codec-warning" id="codecWarning">⚠ MKV/HEVC may not play in Chrome — try MP4 or use Opera/Edge</div>
       <div class="sync-indicator" id="syncIndicator">⟳ Syncing…</div>
 
-      <!-- FPS счётчик — двойной клик по видео для включения/выключения -->
-      <div id="fpsOverlay" style="display:none;position:absolute;top:.6rem;left:.6rem;z-index:20;
-        background:rgba(0,0,0,0.65);color:#00ff88;font-family:monospace;font-size:.72rem;
-        padding:.3rem .6rem;border-radius:6px;pointer-events:none;line-height:1.7;
-        border:1px solid rgba(255,255,255,0.1);">
-        <div id="fpsVal">FPS: —</div>
-        <div id="fpsDropped" style="color:#ffaa00;"></div>
-        <div id="fpsRes" style="color:rgba(255,255,255,0.5);"></div>
-      </div>
-
-      <!-- FPS оверлей — включается двойным кликом по углу -->
-      <div id="fpsOverlay" style="display:none;position:absolute;top:.6rem;left:.6rem;z-index:20;background:rgba(0,0,0,0.6);color:#0f0;font-family:monospace;font-size:.72rem;padding:.25rem .55rem;border-radius:6px;pointer-events:none;line-height:1.6;backdrop-filter:blur(2px);">
-        <div id="fpsVal">FPS: —</div>
-        <div id="fpsDropped" style="color:#fa0;"></div>
-        <div id="fpsRes" style="color:#aaa;"></div>
-      </div>
-
       <div class="player-controls" id="controls" style="display:none">
         <div class="player-progress-wrap">
           <div class="player-progress-bg" id="progressBg" onclick="seekByClick(event)" onmousedown="startDrag(event)">
@@ -1158,7 +1141,6 @@ function goHome(){
   document.getElementById('messages').innerHTML='';
   // FIX [MED-2]: отключаем titleObserver при выходе
   if(_titleObserver){ _titleObserver.disconnect(); _titleObserver=null; }
-  document.getElementById('fpsOverlay').style.display='none';
   document.getElementById('videoArea').classList.remove('has-video');
   queue=[]; queueCurrentIdx=-1; queuePopupOpen=false;
   document.getElementById('queuePopup').classList.remove('open');
@@ -1421,46 +1403,6 @@ function setupEvents(){
   v.addEventListener('pause',()=>{ setPlayIcon(true); if(isHost) syncHost(); showControls(); });
   v.addEventListener('ended', onVideoEnded);
   v.addEventListener('dblclick',toggleFullscreen);
-
-  // ── FPS СЧЁТЧИК — двойной клик правой кнопкой (contextmenu) или тройной клик ──
-  // Включается/выключается по клику на оверлей-зону в левом верхнем углу
-  let _fpsVisible=false;
-  let _fpsInterval=null;
-  let _prevFrames=0;
-  let _prevDropped=0;
-
-  function startFps(){
-    const overlay=document.getElementById('fpsOverlay');
-    overlay.style.display='block';
-    _prevFrames=0; _prevDropped=0;
-    _fpsInterval=setInterval(()=>{
-      if(!v.src||v.paused) return;
-      const q=v.getVideoPlaybackQuality?.();
-      if(!q) return;
-      const fps=q.totalVideoFrames-_prevFrames;
-      const dropped=q.droppedVideoFrames-_prevDropped;
-      _prevFrames=q.totalVideoFrames;
-      _prevDropped=q.droppedVideoFrames;
-      document.getElementById('fpsVal').textContent=`FPS: ${fps}`;
-      document.getElementById('fpsDropped').textContent=dropped>0?`Dropped: ${dropped}`:'';
-      document.getElementById('fpsRes').textContent=
-        v.videoWidth?`${v.videoWidth}×${v.videoHeight}`:'';
-    },1000);
-  }
-
-  function stopFps(){
-    clearInterval(_fpsInterval);
-    document.getElementById('fpsOverlay').style.display='none';
-  }
-
-  // Клик по левому верхнему углу видео (первые 60x30px) — переключает FPS
-  v.addEventListener('click',e=>{
-    const rect=v.getBoundingClientRect();
-    if(e.clientX-rect.left<60 && e.clientY-rect.top<30){
-      _fpsVisible=!_fpsVisible;
-      _fpsVisible ? startFps() : stopFps();
-    }
-  });
 
   const va=document.getElementById('videoArea');
   va.addEventListener('mousemove',()=>{
@@ -1999,7 +1941,6 @@ function spawnPetals(){
   const mainCtx=mainCanvas.getContext('2d');
   let W,H,t=0;
   const branches=[];
-
   function makeBranch(x,y,angle,len,depth){
     if(depth<=0||len<6) return;
     const ex=x+Math.cos(angle)*len,ey=y+Math.sin(angle)*len;
@@ -2009,104 +1950,74 @@ function spawnPetals(){
     makeBranch(ex,ey,angle+spread*(0.7+Math.random()*0.3),len*0.65,depth-1);
     if(depth>3&&Math.random()>.5) makeBranch(ex,ey,angle+(Math.random()-.5)*0.5,len*0.5,depth-2);
   }
-
   const blossoms=[];
-  let _gradientsValid=false;
-  let _gPink=null,_gWhite=null;
   function seedBlossoms(){
     blossoms.length=0;
     branches.forEach(b=>{
       if(b.len<28){
-        // Ограничиваем общее количество цветков до 200
-        if(blossoms.length>=200) return;
-        const count=Math.floor(2+Math.random()*3); // было 2-5, стало 2-4
-        for(let k=0;k<count&&blossoms.length<200;k++){
+        const count=Math.floor(2+Math.random()*5);
+        for(let k=0;k<count;k++){
           const scatter=b.len*0.8;
+          // размер варьируется: большинство мелкие, редкие крупные
           const rnd=Math.random();
           const r=rnd<0.6?(3+Math.random()*3):(6+Math.random()*5);
           blossoms.push({
             x:b.x2+(Math.random()-.5)*scatter,
             y:b.y2+(Math.random()-.5)*scatter,
-            r, phase:Math.random()*Math.PI*2,
+            r,
+            phase:Math.random()*Math.PI*2,
             speed:0.3+Math.random()*0.5,
             pink:Math.random()>.3
           });
         }
       }
     });
-    // Кешируем градиенты после построения
-    _gradientsValid=false;
   }
-
-  function buildGradientCache(ctx){
-    _gPink=ctx.createRadialGradient(0,0,0,0,0,1);
-    _gPink.addColorStop(0,'hsla(338,65%,72%,0.9)');
-    _gPink.addColorStop(0.45,'hsla(338,55%,76%,0.7)');
-    _gPink.addColorStop(0.8,'hsla(335,45%,82%,0.3)');
-    _gPink.addColorStop(1,'transparent');
-    _gWhite=ctx.createRadialGradient(0,0,0,0,0,1);
-    _gWhite.addColorStop(0,'hsla(330,30%,88%,0.85)');
-    _gWhite.addColorStop(0.5,'hsla(330,25%,90%,0.5)');
-    _gWhite.addColorStop(1,'transparent');
-    _gradientsValid=true;
-  }
-
   function buildTree(){
     branches.length=0;
     makeBranch(W*0.08,H*1.05,-Math.PI/2+0.18,H*0.32,9);
     makeBranch(W*1.0,H*0.55,-Math.PI+0.3,W*0.22,6);
     seedBlossoms();
   }
-
-  // Кешируем DOM-запросы
-  let _innerCanvas=null;
-  let _innerCtx=null;
-
   function drawLight(ctx){
     ctx.fillStyle='#f5ede6';ctx.fillRect(0,0,W,H);
-
-    // Туман — 3 радиальных градиента
-    const mists=[
-      {x:.5,y:.35,rx:.9,c:'rgba(255,245,248,0.55)',speed:.6},
-      {x:.15,y:.6,rx:.55,c:'rgba(240,235,248,0.45)',speed:.4},
-      {x:.82,y:.2,rx:.5,c:'rgba(255,240,245,0.5)',speed:.5}
-    ];
+    const mists=[{x:.5,y:.35,rx:.9,ry:.45,c:'rgba(255,245,248,0.55)',speed:.6},{x:.15,y:.6,rx:.55,ry:.35,c:'rgba(240,235,248,0.45)',speed:.4},{x:.82,y:.2,rx:.5,ry:.3,c:'rgba(255,240,245,0.5)',speed:.5}];
     mists.forEach((m,i)=>{
-      const mx=m.x*W+Math.sin(t*m.speed*0.4+i)*W*0.025;
-      const my=m.y*H+Math.cos(t*m.speed*0.3+i*0.7)*H*0.02;
-      const rad=m.rx*Math.min(W,H);
+      const mx=m.x*W+Math.sin(t*m.speed*0.4+i)*W*0.025,my=m.y*H+Math.cos(t*m.speed*0.3+i*0.7)*H*0.02;
       ctx.save();ctx.translate(mx,my);ctx.scale(1,0.45);
-      const g=ctx.createRadialGradient(0,0,0,0,0,rad);
+      const g=ctx.createRadialGradient(0,0,0,0,0,m.rx*Math.min(W,H));
       g.addColorStop(0,m.c);g.addColorStop(1,'transparent');
-      ctx.fillStyle=g;ctx.beginPath();ctx.arc(0,0,rad,0,Math.PI*2);ctx.fill();
-      ctx.restore();
+      ctx.fillStyle=g;ctx.beginPath();ctx.arc(0,0,m.rx*Math.min(W,H),0,Math.PI*2);ctx.fill();ctx.restore();
     });
-
-    // Ветки — убираем save/restore, используем setTransform
     branches.forEach(b=>{
-      const sway=Math.sin(t*0.5+b.phase)*0.8*(1/(b.depth+1))*0.015;
-      const cos=Math.cos(sway),sin=Math.sin(sway);
-      ctx.setTransform(cos,-sin,sin,cos,b.x1,b.y1);
+      const sway=Math.sin(t*0.5+b.phase)*0.8;
+      ctx.save();ctx.translate(b.x1,b.y1);ctx.rotate(sway*(1/(b.depth+1))*0.015);
       ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(b.x2-b.x1,b.y2-b.y1);
       ctx.lineWidth=Math.max(0.5,b.depth*0.55);
       ctx.strokeStyle=`rgba(80,50,40,${Math.min(0.18+b.depth*0.04,0.55)})`;
-      ctx.stroke();
+      ctx.stroke();ctx.restore();
     });
-    ctx.setTransform(1,0,0,1,0,0);
-
-    // Цветки — два шаблонных градиента, масштабируем через setTransform
-    if(!_gradientsValid) buildGradientCache(ctx);
     blossoms.forEach(bl=>{
+      const r=bl.r*(0.9+Math.sin(t*bl.speed+bl.phase)*0.08);
       const sway=Math.sin(t*0.35+bl.phase)*2;
       const cx=bl.x+sway, cy=bl.y;
-      const r=bl.r*(0.9+Math.sin(t*bl.speed+bl.phase)*0.08);
-      ctx.setTransform(r,0,0,r,cx,cy);
-      ctx.fillStyle=bl.pink?_gPink:_gWhite;
-      ctx.beginPath();ctx.arc(0,0,1,0,Math.PI*2);ctx.fill();
-    });
-    ctx.setTransform(1,0,0,1,0,0);
-  }
 
+      // мягкий размытый цветок — один радиальный градиент от непрозрачного к прозрачному
+      const g=ctx.createRadialGradient(cx,cy,0,cx,cy,r);
+      if(bl.pink){
+        g.addColorStop(0,'hsla(338,65%,72%,0.9)');
+        g.addColorStop(0.45,'hsla(338,55%,76%,0.7)');
+        g.addColorStop(0.8,'hsla(335,45%,82%,0.3)');
+        g.addColorStop(1,'transparent');
+      } else {
+        g.addColorStop(0,'hsla(330,30%,88%,0.85)');
+        g.addColorStop(0.5,'hsla(330,25%,90%,0.5)');
+        g.addColorStop(1,'transparent');
+      }
+      ctx.beginPath();ctx.arc(cx,cy,r,0,Math.PI*2);
+      ctx.fillStyle=g;ctx.fill();
+    });
+  }
   function drawDark(ctx){
     ctx.fillStyle='#000';ctx.fillRect(0,0,W,H);
     const glow=ctx.createRadialGradient(W*.5,H,0,W*.5,H,H*.6);
@@ -2120,54 +2031,33 @@ function spawnPetals(){
       ctx.beginPath();ctx.arc(sx,sy,0.4+Math.abs(Math.sin(t*1.2+i))*1.0,0,Math.PI*2);ctx.fill();
     }
   }
-
   function resize(){
     W=window.innerWidth;H=window.innerHeight;
     mainCanvas.width=W;mainCanvas.height=H;
-    _innerCanvas=document.getElementById('bgCanvasInner');
-    if(_innerCanvas){ _innerCanvas.width=W;_innerCanvas.height=H;_innerCtx=_innerCanvas.getContext('2d'); }
-    _gradientsValid=false;
+    const inner=document.getElementById('bgCanvasInner');
+    if(inner){inner.width=W;inner.height=H;}
     buildTree();
   }
-
-  // Фоновую анимацию ограничиваем 30fps — незаметно для глаза, вдвое меньше нагрузки
-  let _lastFrame=0;
-  const BG_FPS=30;
-  const BG_INTERVAL=1000/BG_FPS;
-
-  // Останавливаем анимацию когда вкладка скрыта
-  let _paused=false;
-  document.addEventListener('visibilitychange',()=>{ _paused=document.hidden; });
-
-  function draw(now){
-    requestAnimationFrame(draw);
-    if(_paused) return;
-    if(now-_lastFrame<BG_INTERVAL) return;
-    _lastFrame=now;
-    t+=0.012; // удваиваем шаг т.к. рисуем вдвое реже
-
+  function draw(){
+    t+=0.006;
     const isDark=document.documentElement.getAttribute('data-theme')==='dark';
     mainCtx.clearRect(0,0,W,H);
     if(isDark) drawDark(mainCtx); else drawLight(mainCtx);
-
-    // Зеркалим на inner canvas только в светлой теме без видео
-    if(_innerCanvas&&!isDark){
+    const inner=document.getElementById('bgCanvasInner');
+    if(inner){
       const hasVideo=document.getElementById('videoArea')?.classList.contains('has-video');
-      _innerCanvas.style.opacity=hasVideo?'0':'1';
-      if(!hasVideo&&_innerCtx){
-        _innerCtx.clearRect(0,0,W,H);
-        _innerCtx.drawImage(mainCanvas,0,0);
+      inner.style.opacity=(!isDark&&!hasVideo)?'1':'0';
+      if(!isDark&&!hasVideo){
+        const ictx=inner.getContext('2d');
+        ictx.clearRect(0,0,W,H);
+        ictx.drawImage(mainCanvas,0,0);
       }
-    } else if(_innerCanvas){
-      _innerCanvas.style.opacity='0';
     }
+    requestAnimationFrame(draw);
   }
-
   window.addEventListener('resize',resize);
-  resize();
-  requestAnimationFrame(draw);
+  resize();draw();
 })();
-
 </script>
 </body>
 </html>
