@@ -944,7 +944,7 @@ function goHome(){
   document.getElementById('controls').style.display='none';
   document.getElementById('uploadZone').style.display='none';
   document.getElementById('waitingScreen').style.display='none';
-  document.getElementById('uploadProgressWrap').style.display='none';
+  document.getElementById('uploadProgressWrap').style.cssText='';
   document.getElementById('messages').innerHTML='';
   // FIX [MED-2]: отключаем titleObserver при выходе
   if(_titleObserver){ _titleObserver.disconnect(); _titleObserver=null; }
@@ -1073,9 +1073,10 @@ function selectVideo(input){
 }
 
 function uploadVideo(file){
-  document.getElementById('uploadZone').style.display='none';
+  const uploadZone=document.getElementById('uploadZone');
   const wrap=document.getElementById('uploadProgressWrap');
-  wrap.style.display='flex';
+  uploadZone.style.display='none';
+  wrap.style.cssText='display:flex!important';
   document.getElementById('uploadPct').textContent='0%';
   document.getElementById('uploadFill').style.width='0%';
   document.getElementById('uploadInfo').textContent='';
@@ -1100,7 +1101,7 @@ function uploadVideo(file){
     }
   };
   xhr.onload=()=>{
-    wrap.style.display='none';
+    wrap.style.cssText='';
     if(xhr.status!==200){ sysMsg('Upload failed ('+xhr.status+')'); document.getElementById('uploadZone').style.display='flex'; return; }
     const res=JSON.parse(xhr.responseText);
     // сервер возвращает streamUrl
@@ -1115,7 +1116,7 @@ function uploadVideo(file){
     }));
     sysMsg(i('videoSelected'));
   };
-  xhr.onerror=()=>{ wrap.style.display='none'; document.getElementById('uploadZone').style.display='flex'; sysMsg('Upload failed'); };
+  xhr.onerror=()=>{ wrap.style.cssText=''; document.getElementById('uploadZone').style.display='flex'; sysMsg('Upload failed'); };
   xhr.send(createFormData(file));
 }
 
@@ -1470,7 +1471,7 @@ async function playQueueItem(idx){
 function uploadQueueItem(item){
   return new Promise(resolve=>{
     const wrap=document.getElementById('uploadProgressWrap');
-    wrap.style.display='flex';
+    wrap.style.cssText='display:flex!important';
     document.getElementById('uploadZone').style.display='none';
     document.getElementById('uploadPct').textContent='0%';
     document.getElementById('uploadFill').style.width='0%';
@@ -1494,7 +1495,7 @@ function uploadQueueItem(item){
       }
     };
     xhr.onload=()=>{
-      wrap.style.display='none';
+      wrap.style.cssText='';
       if(xhr.status===200){
         const res=JSON.parse(xhr.responseText);
         item.uploaded=true;
@@ -1504,7 +1505,7 @@ function uploadQueueItem(item){
       }
       resolve();
     };
-    xhr.onerror=()=>{ wrap.style.display='none'; sysMsg('Upload error'); resolve(); };
+    xhr.onerror=()=>{ wrap.style.cssText=''; sysMsg('Upload error'); resolve(); };
     xhr.send(createFormData(item.file));
   });
 }
