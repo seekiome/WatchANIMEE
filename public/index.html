@@ -1229,93 +1229,41 @@ function uploadVideo(file){
 
   const xhr=new XMLHttpRequest();
   xhr.open('POST',`/upload/${roomId}`);
-  let uploadStart=Date.now();
+  const uploadStart=Date.now();
 
   xhr.upload.onprogress=(e)=>{
     if(e.lengthComputable){
       const pct=Math.round((e.loaded/e.total)*100);
-      const elapsed=(Date.now()-uploadStart)/1000;
+      const elapsed=(Date.now()-uploadStart)/1000||0.001;
       const speed=e.loaded/elapsed;
       const remaining=(e.total-e.loaded)/speed;
       document.getElementById('uploadPct').textContent=pct+'%';
       document.getElementById('uploadFill').style.width=pct+'%';
       const speedStr=speed>1048576?`${(speed/1048576).toFixed(1)} MB/s`:`${(speed/1024).toFixed(0)} KB/s`;
-      const etaStr=remaining>60?`${Math.ceil(remaining/60)}m left`:`${Math.ceil(remaining)}s left`;
-      document.getElementById('uploadInfo').textContent=`${speedStr} · ${etaStr}`;
+      const etaStr=isFinite(remaining)?(remaining>60?`${Math.ceil(remaining/60)}m left`:`${Math.ceil(remaining)}s left`):'';
+      document.getElementById('uploadInfo').textContent=`${speedStr}${etaStr?' · '+etaStr:''}`;
     }
   };
-
   xhr.onload=()=>{
     wrap.style.display='none';
-    if(xhr.status!==200){
-      sysMsg('Upload failed ('+xhr.status+')');
-      document.getElementById('uploadZone').style.display='flex';
-      return;
-    }
+    if(xhr.status!==200){ sysMsg('Upload failed ('+xhr.status+')'); document.getElementById('uploadZone').style.display='flex'; return; }
     const res=JSON.parse(xhr.responseText);
+    // Update queue item if it exists
+    if(queue[queueCurrentIdx] && !queue[queueCurrentIdx].uploaded){
+      queue[queueCurrentIdx].uploaded = true;
+      queue[queueCurrentIdx].serverFilename = res.filename;
+    }
     loadVideoFromServer(`/video/${res.filename}`, null, null);
-    ws.send(JSON.stringify({type:'video_ready',filename:res.filename}));
+    if(ws&&ws.readyState===1) ws.send(JSON.stringify({type:'video_ready', filename:res.filename}));
     sysMsg(i('videoSelected'));
   };
-
-  xhr.onerror=()=>{
-    wrap.style.display='none';
-    document.getElementById('uploadZone').style.display='flex';
-    sysMsg('Upload failed — network error');
-  };
-
-  xhr.send(new FormData().append('video',file)||createFormData(file));
+  xhr.onerror=()=>{ wrap.style.display='none'; document.getElementById('uploadZone').style.display='flex'; sysMsg('Upload failed'); };
+  xhr.send(createFormData(file));
 }
 
 function createFormData(file){
   const fd=new FormData(); fd.append('video',file); return fd;
 }
-
-// Fix: uploadVideo was calling FormData wrong — fix inline
-(function fixUpload(){
-  const orig=window.uploadVideo;
-  window.uploadVideo=function(file){
-    document.getElementById('uploadZone').style.display='none';
-    const wrap=document.getElementById('uploadProgressWrap');
-    wrap.style.display='flex';
-    document.getElementById('uploadPct').textContent='0%';
-    document.getElementById('uploadFill').style.width='0%';
-    document.getElementById('uploadInfo').textContent='';
-
-    const xhr=new XMLHttpRequest();
-    xhr.open('POST',`/upload/${roomId}`);
-    const uploadStart=Date.now();
-
-    xhr.upload.onprogress=(e)=>{
-      if(e.lengthComputable){
-        const pct=Math.round((e.loaded/e.total)*100);
-        const elapsed=(Date.now()-uploadStart)/1000||0.001;
-        const speed=e.loaded/elapsed;
-        const remaining=(e.total-e.loaded)/speed;
-        document.getElementById('uploadPct').textContent=pct+'%';
-        document.getElementById('uploadFill').style.width=pct+'%';
-        const speedStr=speed>1048576?`${(speed/1048576).toFixed(1)} MB/s`:`${(speed/1024).toFixed(0)} KB/s`;
-        const etaStr=isFinite(remaining)?(remaining>60?`${Math.ceil(remaining/60)}m left`:`${Math.ceil(remaining)}s left`):'';
-        document.getElementById('uploadInfo').textContent=`${speedStr}${etaStr?' · '+etaStr:''}`;
-      }
-    };
-    xhr.onload=()=>{
-      wrap.style.display='none';
-      if(xhr.status!==200){ sysMsg('Upload failed ('+xhr.status+')'); document.getElementById('uploadZone').style.display='flex'; return; }
-      const res=JSON.parse(xhr.responseText);
-      // Update queue item if it exists
-      if(queue[queueCurrentIdx] && !queue[queueCurrentIdx].uploaded){
-        queue[queueCurrentIdx].uploaded = true;
-        queue[queueCurrentIdx].serverFilename = res.filename;
-      }
-      loadVideoFromServer(`/video/${res.filename}`,null,null);
-      if(ws&&ws.readyState===1) ws.send(JSON.stringify({type:'video_ready',filename:res.filename}));
-      sysMsg(i('videoSelected'));
-    };
-    xhr.onerror=()=>{ wrap.style.display='none'; document.getElementById('uploadZone').style.display='flex'; sysMsg('Upload failed'); };
-    xhr.send(createFormData(file));
-  };
-})();
 
 function loadVideoFromServer(src, state, serverTime){
   const video=document.getElementById('videoPlayer');
@@ -1996,12 +1944,9 @@ function spawnPetals(){
 
 // ── ANIMATED BACKGROUND ──
 (function(){
-  // Renders to both the lobby canvas AND the inner video-area canvas
-  const canvases = [
-    document.getElementById('bgCanvas'),
-    document.getElementById('bgCanvasInner')
-  ];
-  let W,H,t=0;
+  const mainCanvas = document.getElementById('bgCanvas');
+  const mainCtx = mainCanvas.getContext('2d');
+  let W, H, t = 0;
   const branches=[];
   function makeBranch(x,y,angle,len,depth){
     if(depth<=0||len<6) return;
@@ -2070,28 +2015,32 @@ function spawnPetals(){
     }
   }
   function resize(){
-    W=window.innerWidth; H=window.innerHeight;
-    canvases.forEach(c=>{ if(c){ c.width=W; c.height=H; } });
+    W = window.innerWidth; H = window.innerHeight;
+    mainCanvas.width = W; mainCanvas.height = H;
+    const inner = document.getElementById('bgCanvasInner');
+    if(inner){ inner.width = W; inner.height = H; }
     buildTree();
   }
   function draw(){
-    t+=0.006;
-    const isDark=document.documentElement.getAttribute('data-theme')==='dark';
-    canvases.forEach(c=>{
-      if(!c) return;
-      const ctx=c.getContext('2d');
-      // Inner canvas: only show in light theme when no video
-      if(c.id==='bgCanvasInner'){
-        const hasVideo=document.getElementById('videoArea')?.classList.contains('has-video');
-        c.style.opacity=(isDark||hasVideo)?'0':'1';
-        if(isDark||hasVideo) return;
+    t += 0.006;
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    mainCtx.clearRect(0, 0, W, H);
+    if(isDark) drawDark(mainCtx); else drawLight(mainCtx);
+
+    // Mirror to inner canvas (video-area bg) — only in light mode, no video
+    const inner = document.getElementById('bgCanvasInner');
+    if(inner){
+      const hasVideo = document.getElementById('videoArea')?.classList.contains('has-video');
+      inner.style.opacity = (!isDark && !hasVideo) ? '1' : '0';
+      if(!isDark && !hasVideo){
+        const ictx = inner.getContext('2d');
+        ictx.clearRect(0, 0, W, H);
+        ictx.drawImage(mainCanvas, 0, 0);
       }
-      ctx.clearRect(0,0,W,H);
-      if(isDark) drawDark(ctx); else drawLight(ctx);
-    });
+    }
     requestAnimationFrame(draw);
   }
-  window.addEventListener('resize',resize);
+  window.addEventListener('resize', resize);
   resize(); draw();
 })();
 </script>
