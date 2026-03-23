@@ -365,8 +365,8 @@ app.get('/video-stream/:roomId', (req, res) => {
   if (range) {
     const [s, e] = range.replace(/bytes=/, '').split('-');
     const start = parseInt(s, 10);
-    // При перемотке браузер запрашивает большой диапазон — отдаём до 16MB или до конца файла
-    const end = e ? Math.min(parseInt(e, 10), fileSize - 1) : Math.min(start + 16 * 1024 * 1024 - 1, fileSize - 1);
+    // Если браузер не указал end — отдаём до конца файла (без ограничения чанка)
+    const end = e ? Math.min(parseInt(e, 10), fileSize - 1) : fileSize - 1;
     if (isNaN(start) || start >= fileSize || start > end) {
       return res.status(416).set({ 'Content-Range': `bytes */${fileSize}` }).end();
     }
