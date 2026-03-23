@@ -533,6 +533,9 @@ function goHome(){
   if(app.classList.contains('fs-mode')) app.classList.remove('fs-mode','show-ctrl');
   document.getElementById('app').style.display='none';
   document.getElementById('lobby').style.display='flex';
+  // Очищаем внутренний canvas чтобы не было артефактов при смене темы
+  const inner=document.getElementById('bgCanvasInner');
+  if(inner){ inner.getContext('2d').clearRect(0,0,inner.width,inner.height); inner.style.opacity='0'; }
   history.replaceState(null,'',location.pathname);
 }
 
@@ -672,7 +675,6 @@ function uploadAndQueue(file, playImmediately){
     if(item){ item.uploaded=true; item.serverFile=res.serverFile; item._pct=100; }
     renderQueue(); updateQueueBadge();
     if(playImmediately){
-      // Первое видео — запускаем сразу
       if(ws&&ws.readyState===1) ws.send(JSON.stringify({type:'video_ready',origName:res.origName,serverFile:res.serverFile}));
       loadVideoFromServer(`/video-stream/${roomId}`,null,null);
       sysMsg(i('videoSelected'));
@@ -821,6 +823,13 @@ function loadVideoFromServer(src,state,serverTime){
       setPlayIcon(!state.playing);
     }
   },{once:true});
+  video.addEventListener('error',()=>{
+    // Видео не загрузилось — показываем зону загрузки снова если хост
+    if(isHost && document.getElementById('videoPlayer').style.display!=='block'){
+      document.getElementById('uploadZone').style.display='flex';
+      document.getElementById('uploadProgressWrap').classList.remove('active');
+    }
+  },{once:true});
 }
 
 function showPlayer(){
@@ -955,13 +964,16 @@ function spawnPetals(){
     const inner=document.getElementById('bgCanvasInner');
     if(inner){
       const appOpen=document.getElementById('app').style.display==='flex';
-      if(appOpen){ inner.style.opacity='0'; return; }
+      if(appOpen){ inner.style.opacity='0'; inner.getContext('2d').clearRect(0,0,W,H); requestAnimationFrame(draw); return; }
       const hasVideo=document.getElementById('videoArea')?.classList.contains('has-video');
-      inner.style.opacity=(!isDark&&!hasVideo)?'1':'0';
       if(!isDark&&!hasVideo){
+        inner.style.opacity='1';
         const ictx=inner.getContext('2d');
         ictx.clearRect(0,0,W,H);
         ictx.drawImage(mainCanvas,0,0);
+      } else {
+        inner.style.opacity='0';
+        inner.getContext('2d').clearRect(0,0,W,H);
       }
     }
     requestAnimationFrame(draw);
