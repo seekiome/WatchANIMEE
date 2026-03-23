@@ -1,0 +1,15 @@
+.sidebar { width:300px;flex-shrink:0;background:var(--surface3);border-left:1px solid var(--border2);display:flex;flex-direction:column;overflow:hidden;backdrop-filter:blur(12px); }
+.sidebar-header { padding:.8rem 1.25rem;border-bottom:1px solid var(--border2);display:flex;align-items:center;gap:.5rem;font-size:.68rem;color:var(--text-faint);letter-spacing:.12em;text-transform:uppercase;font-family:monospace; }
+.sidebar-header svg { width:13px;height:13px;stroke:var(--text-faint);fill:none;stroke-width:1.8; }
+.msg { display:flex;flex-direction:column;gap:.15rem; }
+.msg-author { font-size:.72rem;font-family:monospace;color:var(--accent);letter-spacing:.04em; }
+.msg-text { font-size:.85rem;line-height:1.5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--msg-bg);border:1px solid var(--border2);padding:.45rem .75rem;border-radius:0 8px 8px 8px;color:var(--text);word-break:break-word; }
+.msg-system .msg-text { background:transparent;border:none;color:var(--text-faint);font-size:.68rem;font-family:monospace;padding:.1rem 0; }
+.chat-input-wrap { padding:.75rem;border-top:1px solid var(--border2);display:flex;gap:.45rem; }
+.chat-input { flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:.6rem .9rem;color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:.9rem;outline:none;transition:border-color .2s; }
+.chat-input:focus { border-color:var(--border-accent); }
+.chat-input::placeholder { color:var(--text-faint); }
+.send-btn { background:var(--btn-bg);border:1px solid var(--border-accent);border-radius:8px;width:38px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .15s; }
+.send-btn:hover { background:var(--btn-bg-hover); }
+.send-btn svg { width:14px;height:14px;stroke:var(--accent);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round; }
+@media(max-width:600px){ .sidebar { width:100%;height:220px;flex-shrink:0;border-left:none;border-top:1px solid var(--border2); } }
