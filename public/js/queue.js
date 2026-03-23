@@ -5,8 +5,18 @@ function playQueueItem(idx){
   queueCurrentIdx=idx;
   if(ws&&ws.readyState===1) ws.send(JSON.stringify({type:'queue_play',idx}));
   loadVideoFromServer(`/video-stream/${roomId}`,null,null);
-  sysMsg(`▶ Now playing: ${item.filename}`);
+  sysMsg(`▶ Now playing: ${item.filename||item.origName}`);
   renderQueue(); updateQueueBadge();
+}
+
+function onVideoEnded(){
+  if(!isHost) return;
+  const nextIdx=queueCurrentIdx+1;
+  if(nextIdx<queue.length&&queue[nextIdx].uploaded){
+    playQueueItem(nextIdx);
+  } else if(ws&&ws.readyState===1){
+    ws.send(JSON.stringify({type:'queue_next'}));
+  }
 }
 
 function renderQueue(){
@@ -59,9 +69,13 @@ function updateQueueBadge(){
   else badge.classList.remove('show');
 }
 
+
 function onVideoEnded(){
   if(!isHost) return;
   const nextIdx=queueCurrentIdx+1;
-  if(nextIdx<queue.length){ playQueueItem(nextIdx); updateQueueBadge(); }
-  else if(ws&&ws.readyState===1) ws.send(JSON.stringify({type:'queue_next'}));
+  if(nextIdx<queue.length&&queue[nextIdx].uploaded){
+    playQueueItem(nextIdx); updateQueueBadge();
+  } else if(ws&&ws.readyState===1){
+    ws.send(JSON.stringify({type:'queue_next'}));
+  }
 }
