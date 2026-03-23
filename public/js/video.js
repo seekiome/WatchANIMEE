@@ -145,6 +145,10 @@ function setupEvents(){
   });
   v.addEventListener('play',()=>{ setPlayIcon(false); if(isHost) syncHost(); showControls(); });
   v.addEventListener('pause',()=>{ setPlayIcon(true); if(isHost) syncHost(); showControls(); });
+  v.addEventListener('seeking',()=>{ showSyncIndicator(); });
+  v.addEventListener('seeked',()=>{ document.getElementById('syncIndicator').classList.remove('show'); if(isHost) syncHost(); });
+  v.addEventListener('waiting',()=>{ showSyncIndicator(); });
+  v.addEventListener('playing',()=>{ document.getElementById('syncIndicator').classList.remove('show'); });
   v.addEventListener('ended',onVideoEnded);
   v.addEventListener('dblclick',toggleFullscreen);
   const va=document.getElementById('videoArea');
