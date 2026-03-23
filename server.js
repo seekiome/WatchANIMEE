@@ -323,6 +323,10 @@ app.post('/upload/:roomId', (req, res) => {
 
     const r = getRoom(roomId);
     r.lastActivity = Date.now();
+    // Сразу устанавливаем videoFile — стрим будет работать без ожидания WS
+    r.videoFile = req.file.filename;
+    r.videoOrigName = req.file.originalname;
+    r.hasVideo = true;
 
     res.json({
       origName: req.file.originalname,
