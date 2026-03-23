@@ -365,12 +365,13 @@ app.get('/video-stream/:roomId', (req, res) => {
   if (range) {
     const [s, e] = range.replace(/bytes=/, '').split('-');
     const start = parseInt(s, 10);
-    const end = e ? Math.min(parseInt(e, 10), fileSize - 1) : Math.min(start + 4 * 1024 * 1024 - 1, fileSize - 1);
+    // При перемотке браузер запрашивает большой диапазон — отдаём до 16MB или до конца файла
+    const end = e ? Math.min(parseInt(e, 10), fileSize - 1) : Math.min(start + 16 * 1024 * 1024 - 1, fileSize - 1);
     if (isNaN(start) || start >= fileSize || start > end) {
       return res.status(416).set({ 'Content-Range': `bytes */${fileSize}` }).end();
     }
     res.writeHead(206, { ...headers, 'Content-Range': `bytes ${start}-${end}/${fileSize}`, 'Content-Length': end - start + 1 });
-    fs.createReadStream(filePath, { start, end, highWaterMark: 512 * 1024 }).pipe(res);
+    fs.createReadStream(filePath, { start, end, highWaterMark: 1024 * 1024 }).pipe(res);
   } else {
     res.writeHead(200, { ...headers, 'Content-Length': fileSize });
     fs.createReadStream(filePath, { highWaterMark: 512 * 1024 }).pipe(res);
