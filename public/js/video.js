@@ -84,9 +84,8 @@ function loadVideoFromServer(src,state,serverTime){
   const video=document.getElementById('videoPlayer');
   video.pause();
   video.removeAttribute('src');
-  video.load();
+  video.load(); // сбрасываем буфер один раз
   video.src=src;
-  console.log('[video] loading src:', src);
   _titleObserver=new MutationObserver(()=>{ document.title='Watch Together'; });
   _titleObserver.observe(document.querySelector('title'),{childList:true,characterData:true,subtree:true});
   let _shown=false;
@@ -114,7 +113,7 @@ function loadVideoFromServer(src,state,serverTime){
       sysMsg('Video load error — try a different format');
     }
   },{once:true});
-  video.load();
+  // НЕ вызываем video.load() второй раз — браузер сам начнёт загрузку
 }
 
 function showPlayer(){
