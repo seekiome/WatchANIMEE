@@ -1,6 +1,0 @@
-function toggleQueue(){ queuePopupOpen=!queuePopupOpen; document.getElementById('queuePopup').classList.toggle('open',queuePopupOpen); }
-document.addEventListener('click',e=>{ const popup=document.getElementById('queuePopup'); const btn=document.getElementById('queueBtn'); if(queuePopupOpen&&popup&&!popup.contains(e.target)&&btn&&!btn.contains(e.target)){ queuePopupOpen=false; popup.classList.remove('open'); } });
-function copyRoomLink(){ if(!roomId) return; navigator.clipboard.writeText(`${location.origin}?room=${roomId}`); const btn=document.getElementById('roomCopyBtn'); if(btn){ btn.style.color='var(--accent)'; setTimeout(()=>btn.style.color='',1500); } }
-function openShare(){ document.getElementById('shareLink').value=`${location.origin}?room=${roomId}`; document.getElementById('shareCode').textContent=roomId; document.getElementById('shareModal').classList.add('open'); }
-function closeShare(){ document.getElementById('shareModal').classList.remove('open'); }
-function copyLink(){ navigator.clipboard.writeText(document.getElementById('shareLink').value); const b=document.getElementById('copyBtnLabel'); b.textContent=i('copyDone'); setTimeout(()=>b.textContent=i('copyBtn'),2000); }
