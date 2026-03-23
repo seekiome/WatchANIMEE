@@ -363,15 +363,16 @@ app.get('/video-stream/:roomId', (req, res) => {
   const headers = { 'Content-Type': contentType, 'Accept-Ranges': 'bytes', 'Cache-Control': 'no-store' };
 
   if (range) {
-    const [s, e] = range.replace(/bytes=/, '').split('-');
-    const start = parseInt(s, 10);
-    // Если браузер не указал end — отдаём до конца файла (без ограничения чанка)
-    const end = e ? Math.min(parseInt(e, 10), fileSize - 1) : fileSize - 1;
+    const parts = range.replace(/bytes=/, '').split('-');
+    const start = parseInt(parts[0], 10);
+    const CHUNK = 4 * 1024 * 1024;
+    const end = parts[1] ? parseInt(parts[1], 10) : Math.min(start + CHUNK - 1, fileSize - 1);
     if (isNaN(start) || start >= fileSize || start > end) {
       return res.status(416).set({ 'Content-Range': `bytes */${fileSize}` }).end();
     }
-    res.writeHead(206, { ...headers, 'Content-Range': `bytes ${start}-${end}/${fileSize}`, 'Content-Length': end - start + 1 });
-    fs.createReadStream(filePath, { start, end, highWaterMark: 1024 * 1024 }).pipe(res);
+    const chunkSize = end - start + 1;
+    res.writeHead(206, { ...headers, 'Content-Range': `bytes ${start}-${end}/${fileSize}`, 'Content-Length': chunkSize });
+    fs.createReadStream(filePath, { start, end, highWaterMark: 512 * 1024 }).pipe(res);
   } else {
     res.writeHead(200, { ...headers, 'Content-Length': fileSize });
     fs.createReadStream(filePath, { highWaterMark: 512 * 1024 }).pipe(res);
