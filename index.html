@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Watch Together</title>
+<script>
+  (function(){
+    var t = localStorage.getItem('wt-theme');
+    if(!t) { t = 'dark'; localStorage.setItem('wt-theme', 'dark'); }
+    document.documentElement.setAttribute('data-theme', t);
+  })();
+</script>
+<link rel="icon" type="image/x-icon" href="/favicon.ico?v=2">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png?v=2">
+<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png?v=2">
+<link rel="apple-touch-icon" href="/favicon-32.png?v=2">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@300;400;700&family=Noto+Sans+JP:wght@300;400&family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300&display=swap" rel="stylesheet">
+
+<!-- Styles -->
+<link rel="stylesheet" href="/css/base.css">
+<link rel="stylesheet" href="/css/lobby.css">
+<link rel="stylesheet" href="/css/player.css">
+<link rel="stylesheet" href="/css/queue.css">
+<link rel="stylesheet" href="/css/chat.css">
+<link rel="stylesheet" href="/css/ui.css">
+</head>
+<body>
+
+<canvas id="bgCanvas"></canvas>
+
+<div class="toolbar-row">
+  <div class="theme-bar">
+    <button class="theme-btn" onclick="setTheme('light')" id="themeLightBtn" title="Light">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+    </button>
+    <button class="theme-btn active" onclick="setTheme('dark')" id="themeDarkBtn" title="Dark">
+      <svg viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
+    </button>
+  </div>
+  <div class="lang-bar">
+    <button class="lang-btn active" onclick="setLang('en')">EN</button>
+    <button class="lang-btn" onclick="setLang('ru')">RU</button>
+    <button class="lang-btn" onclick="setLang('uk')">UK</button>
+    <button class="lang-btn" onclick="setLang('ja')">日本語</button>
+  </div>
+</div>
+
+<div id="lobby">
+  <div class="lobby-logo">Watch Together</div>
+  <div class="lobby-card">
+    <div class="tabs">
+      <button class="tab active" onclick="switchTab('host')" id="tabHost">Host</button>
+      <button class="tab" onclick="switchTab('join')" id="tabJoin">Join</button>
+    </div>
+    <div id="hostTab">
+      <label class="field-label" id="labelNameHost">Your name</label>
+      <input type="text" class="field-input" id="hostName" maxlength="24">
+      <button class="lobby-btn" onclick="createRoom()" id="btnCreate">
+        <span id="btnCreateText">Create room</span>
+        <svg width="1em" height="1em" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8h9M8 4l4 4-4 4"/></svg>
+      </button>
+    </div>
+    <div id="joinTab" style="display:none">
+      <label class="field-label" id="labelNameJoin">Your name</label>
+      <input type="text" class="field-input" id="joinName" maxlength="24">
+      <label class="field-label" id="labelCode">Room code</label>
+      <input type="text" class="field-input" id="joinCode" maxlength="8" style="text-transform:uppercase;letter-spacing:.12em;font-family:monospace">
+      <button class="lobby-btn" onclick="joinRoom()" id="btnJoin">
+        <span id="btnJoinText">Enter room</span>
+        <svg width="1em" height="1em" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8h9M8 4l4 4-4 4"/></svg>
+      </button>
+    </div>
+  </div>
+</div>
+
+<div id="app">
+  <div class="topbar">
+    <div class="topbar-left">
+      <div class="icon-btn" onclick="goHome()" id="homeBtn">
+        <svg viewBox="0 0 24 24"><path d="M3 9.5L12 3l9 6.5V20a1 1 0 01-1 1H5a1 1 0 01-1-1V9.5z"/><path d="M9 21V12h6v9"/></svg>
+      </div>
+      <div class="topbar-logo">Watch Together</div>
+      <div class="room-badge">
+        <div class="room-dot"></div>
+        <span id="roomCodeDisplay">------</span>
+      </div>
+      <div class="icon-btn" onclick="copyRoomLink()" id="roomCopyBtn" title="Copy invite link">
+        <svg viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <div class="viewers-count">
+        <svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+        <span id="viewersCount">1</span>
+      </div>
+      <div class="icon-btn" onclick="openShare()" id="inviteBtn">
+        <svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
+      </div>
+    </div>
+  </div>
+
+  <div class="fs-wrapper" id="fsWrapper">
+    <div class="main-layout">
+      <div class="video-area" id="videoArea">
+        <canvas id="bgCanvasInner" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:0;opacity:1;transition:opacity .4s"></canvas>
+        <div class="upload-zone" id="uploadZone" onclick="document.getElementById('fileInput').click()" style="display:none">
+          <div class="upload-circle">
+            <svg viewBox="0 0 24 24"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0018 9h-1.26A8 8 0 103 16.3"/></svg>
+          </div>
+          <div class="upload-title" id="uploadTitle">Select video</div>
+          <div class="upload-sub">MP4 · MKV · AVI · MOV · WebM · up to 4GB</div>
+          <input type="file" id="fileInput" accept="video/*" onchange="selectVideo(this)">
+        </div>
+        <div class="upload-progress" id="uploadProgressWrap">
+          <div class="upload-progress-label">Uploading… <span id="uploadPct">0%</span></div>
+          <div class="upload-progress-bar"><div class="upload-progress-fill" id="uploadFill"></div></div>
+          <div class="upload-info" id="uploadInfo"></div>
+        </div>
+        <div class="waiting-screen" id="waitingScreen" style="display:none">
+          <div class="waiting-spinner"></div>
+          <div class="waiting-text" id="waitingText">Waiting for host…</div>
+        </div>
+        <video id="videoPlayer" disablepictureinpicture disableremoteplayback controlslist="nodownload noremoteplayback noplaybackrate" x-webkit-airplay="deny" webkit-playsinline playsinline></video>
+        <div class="codec-warning" id="codecWarning">⚠ MKV/HEVC may not play in Chrome — try MP4 or use Opera/Edge</div>
+        <div class="sync-indicator" id="syncIndicator">⟳ Syncing…</div>
+        <div class="player-controls" id="controls" style="display:none">
+          <div class="player-progress-wrap">
+            <div class="player-progress-bg" id="progressBg" onclick="seekByClick(event)" onmousedown="startDrag(event)">
+              <div class="player-progress-fill" id="progressFill"></div>
+              <div class="player-progress-thumb" id="progressThumb"></div>
+            </div>
+            <div class="player-time" id="timeLabel">0:00 / 0:00</div>
+          </div>
+          <div class="player-row">
+            <div class="player-left">
+              <button class="player-btn" id="playPauseBtn" onclick="togglePlay()">
+                <svg id="playIcon" viewBox="0 0 24 24" width="18" height="18"><path d="M5 3l14 9-14 9V3z" fill="currentColor"/></svg>
+              </button>
+              <div class="player-vol-wrap">
+                <button class="player-btn" onclick="toggleMute()" id="muteBtn">
+                  <svg id="volIcon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 010 7.07"/></svg>
+                </button>
+                <input type="range" class="player-vol-slider" id="volSlider" min="0" max="1" step="0.02" value="1" oninput="setVolume(this.value)">
+              </div>
+            </div>
+            <div class="player-right">
+              <button class="player-btn" id="changeVideoBtn" onclick="document.getElementById('fileInputReplace').click()" style="display:none" title="Change video">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              </button>
+              <input type="file" id="fileInputReplace" accept="video/*" style="display:none" onchange="selectVideo(this)">
+              <button class="player-btn" id="queueBtn" onclick="toggleQueue()" style="display:none;position:relative" title="Queue">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+                <div class="queue-btn-badge" id="queueBadge"></div>
+              </button>
+              <button class="player-btn" onclick="toggleFullscreen()" id="fsBtn">
+                <svg id="fsIcon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 3H5a2 2 0 00-2 2v3m18 0V5a2 2 0 00-2-2h-3m0 18h3a2 2 0 002-2v-3M3 16v3a2 2 0 002 2h3"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="sidebar">
+        <div class="sidebar-header">
+          <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+          <span id="chatLabel">Chat</span>
+        </div>
+        <div class="messages" id="messages"></div>
+        <div class="chat-input-wrap">
+          <input type="text" class="chat-input" id="chatInput" maxlength="300" onkeydown="if(event.key==='Enter')sendChat()">
+          <button class="send-btn" onclick="sendChat()">
+            <svg viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22,2 15,22 11,13 2,9"/></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+    <div class="fs-chat" id="fsChat">
+      <div class="sidebar-header">
+        <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+        <span id="fsChatLabel">Chat</span>
+      </div>
+      <div class="messages" id="fsChatMessages"></div>
+      <div class="chat-input-wrap">
+        <input type="text" class="chat-input" id="fsChatInput" placeholder="Message…" maxlength="300" onkeydown="if(event.key==='Enter')sendFsChat()">
+        <button class="send-btn" onclick="sendFsChat()">
+          <svg viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22,2 15,22 11,13 2,9"/></svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="queue-popup" id="queuePopup">
+    <div class="queue-header">
+      <div class="queue-title">
+        <svg viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+        Queue <span class="queue-count" id="queueCount">0</span>
+      </div>
+      <button class="queue-close" onclick="toggleQueue()">✕</button>
+    </div>
+    <div class="queue-add-row">
+      <button class="queue-add-btn" onclick="document.getElementById('fileInputQueue').click()">
+        <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Add video
+      </button>
+      <input type="file" id="fileInputQueue" accept="video/*" multiple style="display:none" onchange="addToQueue(this)">
+    </div>
+    <div class="queue-list" id="queueList">
+      <div class="queue-empty" id="queueEmpty">Queue is empty — add videos above</div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="shareModal" onclick="if(event.target===this)closeShare()">
+    <div class="modal">
+      <div class="modal-title" id="modalTitle">Invite friends</div>
+      <div class="modal-sub" id="modalSub">// share the link or room code</div>
+      <div class="copy-row">
+        <input type="text" class="copy-input" id="shareLink" readonly>
+        <button class="copy-btn" id="copyBtn" onclick="copyLink()"><span id="copyBtnLabel">Copy</span></button>
+      </div>
+      <div class="or-divider" id="orCode">or room code</div>
+      <div class="room-code-big" id="shareCode">------</div>
+      <button class="modal-close" id="modalClose" onclick="closeShare()"><span id="modalCloseText">Close</span></button>
+    </div>
+  </div>
+</div>
+
+<!-- Scripts (order matters: state → i18n → theme → lobby → ws → video → queue → chat → ui → background) -->
+<script src="/js/state.js"></script>
+<script src="/js/i18n.js"></script>
+<script src="/js/theme.js"></script>
+<script src="/js/lobby.js"></script>
+<script src="/js/ws.js"></script>
+<script src="/js/video.js"></script>
+<script src="/js/queue.js"></script>
+<script src="/js/chat.js"></script>
+<script src="/js/ui.js"></script>
+<script src="/js/background.js"></script>
+
+</body>
+</html>
