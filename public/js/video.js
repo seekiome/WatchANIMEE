@@ -53,7 +53,12 @@ function uploadAndQueue(file, playImmediately){
     if(item){ item.uploaded=true; item.serverFile=res.serverFile; item._pct=100; }
     renderQueue(); updateQueueBadge();
     if(playImmediately){
-      if(ws&&ws.readyState===1) ws.send(JSON.stringify({type:'video_ready',origName:res.origName,serverFile:res.serverFile}));
+      if(ws&&ws.readyState===1){
+        // Сначала добавляем в очередь сервера
+        ws.send(JSON.stringify({type:'queue_add',id,origName:res.origName,serverFile:res.serverFile}));
+        // Потом сообщаем что оно играет
+        ws.send(JSON.stringify({type:'video_ready',origName:res.origName,serverFile:res.serverFile}));
+      }
       loadVideoFromServer(`/video-stream/${roomId}`,null,null);
       sysMsg(i('videoSelected'));
     } else {
