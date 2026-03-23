@@ -86,11 +86,13 @@ function loadVideoFromServer(src,state,serverTime){
   video.removeAttribute('src');
   video.load();
   video.src=src;
+  console.log('[video] loading src:', src);
   _titleObserver=new MutationObserver(()=>{ document.title='Watch Together'; });
   _titleObserver.observe(document.querySelector('title'),{childList:true,characterData:true,subtree:true});
   let _shown=false;
   function onReady(){
     if(_shown) return; _shown=true;
+    console.log('[video] onReady fired, showing player');
     document.getElementById('uploadProgressWrap').classList.remove('active');
     document.getElementById('uploadZone').style.display='none';
     showPlayer(); setupEvents();
@@ -102,9 +104,10 @@ function loadVideoFromServer(src,state,serverTime){
       setPlayIcon(!state.playing);
     }
   }
-  video.addEventListener('canplay',onReady,{once:true});
-  video.addEventListener('loadedmetadata',onReady,{once:true});
-  video.addEventListener('error',()=>{
+  video.addEventListener('canplay',()=>{ console.log('[video] canplay'); onReady(); },{once:true});
+  video.addEventListener('loadedmetadata',()=>{ console.log('[video] loadedmetadata'); onReady(); },{once:true});
+  video.addEventListener('error',(e)=>{
+    console.error('[video] error:', video.error);
     if(!_shown&&isHost){
       document.getElementById('uploadProgressWrap').classList.remove('active');
       document.getElementById('uploadZone').style.display='flex';
