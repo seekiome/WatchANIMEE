@@ -78,17 +78,15 @@ function removeFromQueue(id){
   renderQueue(); updateQueueBadge();
 }
 
+// Оригинальная простая функция — точно как в рабочем index.html
 function loadVideoFromServer(src,state,serverTime){
   _eventsSetup=false;
   if(_titleObserver){ _titleObserver.disconnect(); _titleObserver=null; }
   const video=document.getElementById('videoPlayer');
-  video.src='';
-  video.src=src;
+  video.src=''; video.src=src;
   _titleObserver=new MutationObserver(()=>{ document.title='Watch Together'; });
   _titleObserver.observe(document.querySelector('title'),{childList:true,characterData:true,subtree:true});
-  let _shown=false;
-  function onReady(){
-    if(_shown) return; _shown=true;
+  video.addEventListener('canplay',()=>{
     document.getElementById('uploadProgressWrap').classList.remove('active');
     document.getElementById('uploadZone').style.display='none';
     showPlayer(); setupEvents();
@@ -98,15 +96,6 @@ function loadVideoFromServer(src,state,serverTime){
       video.currentTime=Math.min(targetTime,video.duration||targetTime);
       if(state.playing) video.play().catch(()=>{});
       setPlayIcon(!state.playing);
-    }
-  }
-  video.addEventListener('canplay', onReady, {once:true});
-  video.addEventListener('loadedmetadata', onReady, {once:true});
-  video.addEventListener('error',()=>{
-    if(!_shown&&isHost){
-      document.getElementById('uploadProgressWrap').classList.remove('active');
-      document.getElementById('uploadZone').style.display='flex';
-      sysMsg('Video load error — try a different format');
     }
   },{once:true});
 }
