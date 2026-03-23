@@ -55,48 +55,6 @@ function updateQueueBadge(){
 function onVideoEnded(){
   if(!isHost) return;
   const nextIdx=queueCurrentIdx+1;
-  if(nextIdx<queue.length){
-    playQueueItem(nextIdx); updateQueueBadge();
-  } else {
-    // Очередь кончилась — сообщаем серверу
-    if(ws&&ws.readyState===1) ws.send(JSON.stringify({type:'queue_next'}));
-  }
+  if(nextIdx<queue.length){ playQueueItem(nextIdx); updateQueueBadge(); }
+  else if(ws&&ws.readyState===1) ws.send(JSON.stringify({type:'queue_next'}));
 }
-
-function uploadVideo(file){
-  // Для зрителей — прямая загрузка без очереди
-  const uploadZone=document.getElementById('uploadZone');
-  const wrap=document.getElementById('uploadProgressWrap');
-  uploadZone.style.display='none'; wrap.classList.add('active');
-  document.getElementById('uploadPct').textContent='0%';
-  document.getElementById('uploadFill').style.width='0%';
-  document.getElementById('uploadInfo').textContent='';
-  const xhr=new XMLHttpRequest();
-  xhr.open('POST',`/upload/${roomId}`);
-  const uploadStart=Date.now();
-  xhr.upload.onprogress=(e)=>{
-    if(e.lengthComputable){
-      const pct=Math.round((e.loaded/e.total)*100);
-      const elapsed=(Date.now()-uploadStart)/1000||0.001;
-      const speed=e.loaded/elapsed;
-      const remaining=(e.total-e.loaded)/speed;
-      document.getElementById('uploadPct').textContent=pct+'%';
-      document.getElementById('uploadFill').style.width=pct+'%';
-      const speedStr=speed>1048576?`${(speed/1048576).toFixed(1)} MB/s`:`${(speed/1024).toFixed(0)} KB/s`;
-      const etaStr=isFinite(remaining)?(remaining>60?`${Math.ceil(remaining/60)}m left`:`${Math.ceil(remaining)}s left`):'';
-      document.getElementById('uploadInfo').textContent=`${speedStr}${etaStr?' · '+etaStr:''}`;
-    }
-  };
-  xhr.onload=()=>{
-    wrap.classList.remove('active');
-    if(xhr.status!==200){ sysMsg('Upload failed ('+xhr.status+')'); uploadZone.style.display='flex'; return; }
-    const res=JSON.parse(xhr.responseText);
-    loadVideoFromServer(`/video-stream/${roomId}`,null,null);
-    if(ws&&ws.readyState===1) ws.send(JSON.stringify({type:'video_ready',origName:res.origName,serverFile:res.serverFile}));
-    sysMsg(i('videoSelected'));
-  };
-  xhr.onerror=()=>{ wrap.classList.remove('active'); uploadZone.style.display='flex'; sysMsg('Upload failed'); };
-  xhr.send((()=>{ const fd=new FormData(); fd.append('video',file); return fd; })());
-}
-
-let _titleObserver=null;

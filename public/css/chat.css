@@ -12,4 +12,4 @@
 .send-btn { background:var(--btn-bg);border:1px solid var(--border-accent);border-radius:8px;width:38px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .15s; }
 .send-btn:hover { background:var(--btn-bg-hover); }
 .send-btn svg { width:14px;height:14px;stroke:var(--accent);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round; }
-  .sidebar { width:100%;height:220px;flex-shrink:0;border-left:none;border-top:1px solid var(--border2); }
+@media(max-width:600px){ .sidebar { width:100%;height:220px;flex-shrink:0;border-left:none;border-top:1px solid var(--border2); } }
