@@ -2,7 +2,9 @@ let _titleObserver = null;
 
 function selectVideo(input){
   const f=input.files[0]; if(!f) return;
-  uploadAndQueue(f, queue.length===0 && document.getElementById('videoPlayer').style.display!=='block');
+  const videoPlaying=document.getElementById('videoPlayer').style.display==='block';
+  // Если видео уже играет — всегда добавляем в очередь, не трогаем текущее
+  uploadAndQueue(f, !videoPlaying && queue.length===0);
   input.value='';
 }
 
