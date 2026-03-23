@@ -10,6 +10,18 @@ window.addEventListener('load',()=>{
   setTheme(localStorage.getItem('wt-theme')||'dark');
   setLang('en');
   spawnPetals();
+  // Восстанавливаем комнату после перезагрузки
+  const saved=sessionStorage.getItem('wt-room');
+  if(saved){
+    try{
+      const d=JSON.parse(saved);
+      if(d.roomId&&d.myName){
+        roomId=d.roomId; myName=d.myName; isHost=d.isHost;
+        startApp();
+        return;
+      }
+    }catch(e){}
+  }
 });
 
 function createRoom(){
@@ -51,6 +63,7 @@ function goHome(){
   if(app.classList.contains('fs-mode')) app.classList.remove('fs-mode','show-ctrl');
   document.getElementById('app').style.display='none';
   document.getElementById('lobby').style.display='flex';
+  sessionStorage.removeItem('wt-room');
   // Очищаем внутренний canvas чтобы не было артефактов при смене темы
   const inner=document.getElementById('bgCanvasInner');
   if(inner){ inner.getContext('2d').clearRect(0,0,inner.width,inner.height); inner.style.opacity='0'; }
@@ -64,5 +77,7 @@ function startApp(){
   document.getElementById('roomCodeDisplay').textContent=roomId;
   if(isHost) document.getElementById('uploadZone').style.display='flex';
   else { document.getElementById('waitingScreen').style.display='flex'; document.getElementById('waitingText').textContent=i('waitingHost'); }
+  // Сохраняем состояние комнаты
+  sessionStorage.setItem('wt-room',JSON.stringify({roomId,myName,isHost}));
   connectWS();
 }
