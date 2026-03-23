@@ -810,10 +810,20 @@ function loadVideoFromServer(src,state,serverTime){
   _eventsSetup=false;
   if(_titleObserver){ _titleObserver.disconnect(); _titleObserver=null; }
   const video=document.getElementById('videoPlayer');
-  video.src=''; video.src=src;
+  video.pause();
+  video.removeAttribute('src');
+  video.load();
+  video.src=src;
+
   _titleObserver=new MutationObserver(()=>{ document.title='Watch Together'; });
   _titleObserver.observe(document.querySelector('title'),{childList:true,characterData:true,subtree:true});
-  video.addEventListener('canplay',()=>{
+
+  let _shown=false;
+  function onReady(){
+    if(_shown) return; _shown=true;
+    // Убираем прогресс-бар и зону загрузки
+    document.getElementById('uploadProgressWrap').classList.remove('active');
+    document.getElementById('uploadZone').style.display='none';
     showPlayer(); setupEvents();
     if(state){
       let targetTime=state.time||0;
@@ -822,14 +832,17 @@ function loadVideoFromServer(src,state,serverTime){
       if(state.playing) video.play().catch(()=>{});
       setPlayIcon(!state.playing);
     }
-  },{once:true});
+  }
+  video.addEventListener('canplay', onReady, {once:true});
+  video.addEventListener('loadedmetadata', onReady, {once:true});
   video.addEventListener('error',()=>{
-    // Видео не загрузилось — показываем зону загрузки снова если хост
-    if(isHost && document.getElementById('videoPlayer').style.display!=='block'){
-      document.getElementById('uploadZone').style.display='flex';
+    if(!_shown && isHost){
       document.getElementById('uploadProgressWrap').classList.remove('active');
+      document.getElementById('uploadZone').style.display='flex';
+      sysMsg('Video load error — try a different format');
     }
   },{once:true});
+  video.load();
 }
 
 function showPlayer(){
