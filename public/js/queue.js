@@ -13,8 +13,15 @@ function renderQueue(){
   const list=document.getElementById('queueList');
   const empty=document.getElementById('queueEmpty');
   document.getElementById('queueCount').textContent=queue.length;
-  if(queue.length===0){ empty.style.display='block'; list.innerHTML=''; list.appendChild(empty); return; }
-  empty.style.display='none'; list.innerHTML='';
+  if(queue.length===0){
+    if(empty) empty.style.display='block';
+    // Удаляем все элементы кроме queueEmpty
+    Array.from(list.children).forEach(c=>{ if(c.id!=='queueEmpty') c.remove(); });
+    return;
+  }
+  if(empty) empty.style.display='none';
+  // Удаляем все элементы кроме queueEmpty
+  Array.from(list.children).forEach(c=>{ if(c.id!=='queueEmpty') c.remove(); });
   queue.forEach((item,idx)=>{
     const isActive=idx===queueCurrentIdx;
     const div=document.createElement('div');
