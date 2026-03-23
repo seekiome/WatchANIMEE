@@ -211,9 +211,14 @@ wss.on('connection', (ws) => {
     if (msg.type === 'video_ready' && isHost) {
       const room = rooms[roomId];
       if (!room) return;
-      // Берём serverFile из msg (новый формат) или из текущего room.videoFile
       const serverFile = msg.serverFile || room.videoFile;
-      if (serverFile) setRoomVideo(room, serverFile, msg.origName || msg.filename || room.videoOrigName);
+      if (serverFile) {
+        room.videoFile = serverFile;
+        room.videoOrigName = msg.origName || msg.filename || room.videoOrigName;
+        room.hasVideo = true;
+        room.lastActivity = Date.now();
+        // НЕ сбрасываем state и queue — только обновляем файл
+      }
       broadcast(roomId, {
         type: 'video_ready',
         streamUrl: `/video-stream/${roomId}`,
@@ -226,7 +231,10 @@ wss.on('connection', (ws) => {
     if (msg.type === 'queue_add' && isHost) {
       const room = rooms[roomId];
       if (!room) return;
+      const newIdx = room.queue.length;
       room.queue.push({ id: msg.id, origName: msg.origName, serverFile: msg.serverFile });
+      // Если это первый элемент — он текущий
+      if (room.queue.length === 1) room.queueIdx = 0;
       broadcastQueue(roomId);
     }
 
