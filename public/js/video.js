@@ -86,7 +86,7 @@ function loadVideoFromServer(src,state,serverTime){
   _eventsSetup=false;
   if(_titleObserver){ _titleObserver.disconnect(); _titleObserver=null; }
   const video=document.getElementById('videoPlayer');
-  video.src=''; video.src=src;
+  video.src=src;
   _titleObserver=new MutationObserver(()=>{ document.title='Watch Together'; });
   _titleObserver.observe(document.querySelector('title'),{childList:true,characterData:true,subtree:true});
   video.addEventListener('canplay',()=>{
