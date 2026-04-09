@@ -86,18 +86,10 @@ function loadVideoFromServer(src,state,serverTime){
   _eventsSetup=false;
   if(_titleObserver){ _titleObserver.disconnect(); _titleObserver=null; }
   const video=document.getElementById('videoPlayer');
-  video.pause();
-  video.removeAttribute('src');
-  video.load();
-  video.src=src;
-
+  video.src=''; video.src=src;
   _titleObserver=new MutationObserver(()=>{ document.title='Watch Together'; });
   _titleObserver.observe(document.querySelector('title'),{childList:true,characterData:true,subtree:true});
-
-  let _shown=false;
-  function onReady(){
-    if(_shown) return; _shown=true;
-    // Убираем прогресс-бар и зону загрузки
+  video.addEventListener('canplay',()=>{
     document.getElementById('uploadProgressWrap').classList.remove('active');
     document.getElementById('uploadZone').style.display='none';
     showPlayer(); setupEvents();
@@ -108,17 +100,7 @@ function loadVideoFromServer(src,state,serverTime){
       if(state.playing) video.play().catch(()=>{});
       setPlayIcon(!state.playing);
     }
-  }
-  video.addEventListener('canplay', onReady, {once:true});
-  video.addEventListener('loadedmetadata', onReady, {once:true});
-  video.addEventListener('error',()=>{
-    if(!_shown && isHost){
-      document.getElementById('uploadProgressWrap').classList.remove('active');
-      document.getElementById('uploadZone').style.display='flex';
-      sysMsg('Video load error — try a different format');
-    }
   },{once:true});
-  video.load();
 }
 
 function showPlayer(){
@@ -142,8 +124,7 @@ function showControls(){
 function setupEvents(){
   if(_eventsSetup) return; _eventsSetup=true;
   const v=document.getElementById('videoPlayer');
-  const isChrome=!!window.chrome&&!window.opr&&!/OPR/.test(navigator.userAgent);
-  if(isChrome) v.addEventListener('error',()=>{ document.getElementById('codecWarning').classList.add('show'); },{once:true});
+  if(!!window.chrome&&!window.opr) v.addEventListener('error',()=>{ document.getElementById('codecWarning').classList.add('show'); },{once:true});
   v.addEventListener('timeupdate',()=>{
     if(v.duration){ const pct=(v.currentTime/v.duration)*100; document.getElementById('progressFill').style.width=pct+'%'; document.getElementById('progressThumb').style.left=pct+'%'; document.getElementById('timeLabel').textContent=`${ft(v.currentTime)} / ${ft(v.duration)}`; }
     if(isHost&&!isSyncing) throttleSync(v);
