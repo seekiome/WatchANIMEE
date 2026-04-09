@@ -10,18 +10,6 @@ window.addEventListener('load',()=>{
   setTheme(localStorage.getItem('wt-theme')||'dark');
   setLang('en');
   spawnPetals();
-  // Восстанавливаем комнату после перезагрузки
-  const saved=sessionStorage.getItem('wt-room');
-  if(saved){
-    try{
-      const d=JSON.parse(saved);
-      if(d.roomId&&d.myName){
-        roomId=d.roomId; myName=d.myName; isHost=d.isHost;
-        startApp();
-        return;
-      }
-    }catch(e){}
-  }
 });
 
 function createRoom(){
@@ -44,15 +32,15 @@ function goHome(){
   if(ws){ ws.onclose=null; ws.close(); ws=null; }
   const v=document.getElementById('videoPlayer');
   try{ v.pause(); }catch(e){}
-  if(v.src&&v.src.startsWith('blob:')) URL.revokeObjectURL(v.src);
-  v.removeAttribute('src'); v.srcObject=null; v.style.display='none';
-  try{ v.load(); }catch(e){}
+  v.src='';
+  v.style.display='none';
   isHost=false; isSyncing=false; _eventsSetup=false; myClientId=null; sessionStorage.removeItem('wt-clientId');
   document.getElementById('controls').style.display='none';
   document.getElementById('uploadZone').style.display='none';
   document.getElementById('waitingScreen').style.display='none';
   document.getElementById('uploadProgressWrap').classList.remove('active');
   document.getElementById('messages').innerHTML='';
+  document.getElementById('fsChatMessages').innerHTML='';
   if(_titleObserver){ _titleObserver.disconnect(); _titleObserver=null; }
   document.getElementById('videoArea').classList.remove('has-video');
   queue=[]; queueCurrentIdx=-1; queuePopupOpen=false;
@@ -63,8 +51,6 @@ function goHome(){
   if(app.classList.contains('fs-mode')) app.classList.remove('fs-mode','show-ctrl');
   document.getElementById('app').style.display='none';
   document.getElementById('lobby').style.display='flex';
-  sessionStorage.removeItem('wt-room');
-  // Очищаем внутренний canvas чтобы не было артефактов при смене темы
   const inner=document.getElementById('bgCanvasInner');
   if(inner){ inner.getContext('2d').clearRect(0,0,inner.width,inner.height); inner.style.opacity='0'; }
   history.replaceState(null,'',location.pathname);
@@ -77,7 +63,5 @@ function startApp(){
   document.getElementById('roomCodeDisplay').textContent=roomId;
   if(isHost) document.getElementById('uploadZone').style.display='flex';
   else { document.getElementById('waitingScreen').style.display='flex'; document.getElementById('waitingText').textContent=i('waitingHost'); }
-  // Сохраняем состояние комнаты
-  sessionStorage.setItem('wt-room',JSON.stringify({roomId,myName,isHost}));
   connectWS();
 }
