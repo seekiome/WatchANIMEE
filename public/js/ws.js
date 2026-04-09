@@ -1,7 +1,6 @@
 function connectWS(){
   const proto=location.protocol==='https:'?'wss':'ws';
   ws=new WebSocket(`${proto}://${location.host}`);
-  // clientId сохраняем в sessionStorage чтобы при реконнекте сервер узнал хоста
   if(!myClientId) myClientId=sessionStorage.getItem('wt-clientId')||rid(8);
   sessionStorage.setItem('wt-clientId',myClientId);
   let _pingTime=Date.now();
@@ -19,16 +18,13 @@ function connectWS(){
     }
     if(msg.type==='viewers') document.getElementById('viewersCount').textContent=msg.count;
     if(msg.type==='video_ready'){
-      // Зрители всегда загружают видео. Хост загружает только если у него нет текущего видео.
       if(!isHost){
         document.getElementById('waitingText').textContent=i('waitRecv');
         loadVideoFromServer(msg.streamUrl,msg.state||null,msg.serverTime||null);
         sysMsg(i('videoReceived'));
       } else if(msg.state && document.getElementById('videoPlayer').style.display==='none'){
-        // Хост реконнектнулся — восстанавливаем плеер
         loadVideoFromServer(msg.streamUrl,msg.state,msg.serverTime||null);
       }
-      // Обновляем индекс очереди если пришёл
       if(msg.queueIdx!==undefined) queueCurrentIdx=msg.queueIdx;
     }
     if(msg.type==='host_left') sysMsg(i('hostLeft'));
@@ -39,19 +35,28 @@ function connectWS(){
       const latency=_networkLatency/1000;
       const targetTime=msg.playing?msg.time+latency:msg.time;
       const drift=Math.abs(v.currentTime-targetTime);
-      if(drift>1.0){ v.currentTime=targetTime; showSyncIndicator(); }
-      else if(drift>0.3){ v.playbackRate=msg.playing?(drift>0?1.05:0.95):1; setTimeout(()=>{ v.playbackRate=1; },1000); }
-      if(msg.playing&&v.paused) v.play().catch(()=>{});
+      // Не трогаем позицию пока буферизирует — иначе будет прыжок
+      const isBuffering=v.readyState<3;
+      if(!isBuffering){
+        if(drift>5.0){
+          // Хост перемотал далеко — жёсткая синхронизация
+          v.currentTime=targetTime;
+          showSyncIndicator();
+        } else if(drift>1.5){
+          // Небольшое отставание — плавная корректировка
+          v.playbackRate=msg.playing?(v.currentTime<targetTime?1.1:0.9):1;
+          setTimeout(()=>{ v.playbackRate=1; },3000);
+        }
+      }
+      if(msg.playing&&v.paused&&!isBuffering) v.play().catch(()=>{});
       if(!msg.playing&&!v.paused) v.pause();
       setPlayIcon(!msg.playing);
-      setTimeout(()=>isSyncing=false,300);
+      setTimeout(()=>isSyncing=false,500);
     }
     if(msg.type==='queue_update'){
-      // Сервер прислал актуальную очередь — синхронизируем локально
       queue=msg.queue.map(q=>({id:q.id,filename:q.origName,origName:q.origName,uploaded:true,serverFile:null,streamUrl:`/video-stream/${roomId}`}));
       queueCurrentIdx=msg.queueIdx;
       renderQueue(); updateQueueBadge();
-      // Показываем кнопку очереди если есть видео
       if(queue.length>0) document.getElementById('queueBtn').style.display='flex';
     }
     if(msg.type==='chat') addMsg(msg.name,msg.text,msg.avatar);
