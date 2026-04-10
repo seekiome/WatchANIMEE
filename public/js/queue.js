@@ -13,7 +13,7 @@ function onVideoEnded(){
   if(!isHost) return;
   const nextIdx=queueCurrentIdx+1;
   if(nextIdx<queue.length&&queue[nextIdx].uploaded){
-    playQueueItem(nextIdx);
+    playQueueItem(nextIdx); updateQueueBadge();
   } else if(ws&&ws.readyState===1){
     ws.send(JSON.stringify({type:'queue_next'}));
   }
@@ -25,12 +25,10 @@ function renderQueue(){
   document.getElementById('queueCount').textContent=queue.length;
   if(queue.length===0){
     if(empty) empty.style.display='block';
-    // Удаляем все элементы кроме queueEmpty
     Array.from(list.children).forEach(c=>{ if(c.id!=='queueEmpty') c.remove(); });
     return;
   }
   if(empty) empty.style.display='none';
-  // Удаляем все элементы кроме queueEmpty
   Array.from(list.children).forEach(c=>{ if(c.id!=='queueEmpty') c.remove(); });
   queue.forEach((item,idx)=>{
     const isActive=idx===queueCurrentIdx;
@@ -67,15 +65,4 @@ function updateQueueBadge(){
   const remaining=queue.length-(queueCurrentIdx+1);
   if(remaining>0){ badge.textContent=remaining; badge.classList.add('show'); }
   else badge.classList.remove('show');
-}
-
-
-function onVideoEnded(){
-  if(!isHost) return;
-  const nextIdx=queueCurrentIdx+1;
-  if(nextIdx<queue.length&&queue[nextIdx].uploaded){
-    playQueueItem(nextIdx); updateQueueBadge();
-  } else if(ws&&ws.readyState===1){
-    ws.send(JSON.stringify({type:'queue_next'}));
-  }
 }
