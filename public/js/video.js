@@ -129,7 +129,18 @@ function setupEvents(){
   const isChrome=!!window.chrome&&!window.opr&&!/OPR/.test(navigator.userAgent);
   if(isChrome) v.addEventListener('error',()=>{ document.getElementById('codecWarning').classList.add('show'); },{once:true});
   v.addEventListener('timeupdate',()=>{
-    if(v.duration){ const pct=(v.currentTime/v.duration)*100; document.getElementById('progressFill').style.width=pct+'%'; document.getElementById('progressThumb').style.left=pct+'%'; document.getElementById('timeLabel').textContent=`${ft(v.currentTime)} / ${ft(v.duration)}`; }
+    if(v.duration){
+      const pct=(v.currentTime/v.duration)*100;
+      document.getElementById('progressFill').style.width=pct+'%';
+      document.getElementById('progressThumb').style.left=pct+'%';
+      document.getElementById('timeLabel').textContent=`${ft(v.currentTime)} / ${ft(v.duration)}`;
+      // Серая полоска буфера как на YouTube
+      if(v.buffered.length>0){
+        const bufferedEnd=v.buffered.end(v.buffered.length-1);
+        const bufferedPct=(bufferedEnd/v.duration)*100;
+        document.getElementById('progressBuffered').style.width=bufferedPct+'%';
+      }
+    }
     if(isHost&&!isSyncing) throttleSync(v);
   });
   v.addEventListener('play',()=>{ setPlayIcon(false); if(isHost) syncHost(); showControls(); });
