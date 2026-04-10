@@ -121,12 +121,13 @@
           <div class="waiting-spinner"></div>
           <div class="waiting-text" id="waitingText">Waiting for host…</div>
         </div>
-        <video id="videoPlayer" disablepictureinpicture disableremoteplayback controlslist="nodownload noremoteplayback noplaybackrate" x-webkit-airplay="deny" webkit-playsinline playsinline></video>
+        <video id="videoPlayer" preload="auto" disablepictureinpicture disableremoteplayback controlslist="nodownload noremoteplayback noplaybackrate" x-webkit-airplay="deny" webkit-playsinline playsinline></video>
         <div class="codec-warning" id="codecWarning">⚠ MKV/HEVC may not play in Chrome — try MP4 or use Opera/Edge</div>
         <div class="sync-indicator" id="syncIndicator">⟳ Syncing…</div>
         <div class="player-controls" id="controls" style="display:none">
           <div class="player-progress-wrap">
             <div class="player-progress-bg" id="progressBg" onclick="seekByClick(event)" onmousedown="startDrag(event)">
+              <div class="player-progress-buffered" id="progressBuffered"></div>
               <div class="player-progress-fill" id="progressFill"></div>
               <div class="player-progress-thumb" id="progressThumb"></div>
             </div>
