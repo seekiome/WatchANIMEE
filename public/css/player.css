@@ -35,7 +35,8 @@ video::-webkit-media-controls-start-playback-button { display:none!important; }
 .player-progress-wrap { display:flex;align-items:center;gap:.75rem;margin-bottom:.5rem; }
 .player-progress-bg { flex:1;height:4px;background:rgba(255,255,255,0.15);border-radius:4px;cursor:pointer;position:relative;transition:height .15s; }
 .player-progress-bg:hover { height:6px; }
-.player-progress-fill { position:absolute;left:0;top:0;height:100%;background:var(--accent);border-radius:4px;pointer-events:none; }
+.player-progress-fill { position:absolute;left:0;top:0;height:100%;background:var(--accent);border-radius:4px;pointer-events:none;z-index:2; }
+.player-progress-buffered { position:absolute;left:0;top:0;height:100%;background:rgba(255,255,255,0.25);border-radius:4px;pointer-events:none;z-index:1;transition:width .3s; }
 .player-progress-thumb { position:absolute;top:50%;transform:translate(-50%,-50%);width:13px;height:13px;border-radius:50%;background:#fff;pointer-events:none;box-shadow:0 0 4px rgba(0,0,0,0.4);opacity:0;transition:opacity .15s; }
 .player-progress-bg:hover .player-progress-thumb { opacity:1; }
 .player-time { font-family:monospace;font-size:.68rem;color:rgba(255,255,255,0.55);white-space:nowrap;flex-shrink:0; }
@@ -49,7 +50,7 @@ video::-webkit-media-controls-start-playback-button { display:none!important; }
 .codec-warning { position:absolute;top:1rem;left:50%;transform:translateX(-50%);background:rgba(200,80,40,0.92);border-radius:10px;padding:.5rem 1rem;font-family:monospace;font-size:.72rem;color:#fff;z-index:15;white-space:nowrap;display:none; }
 .codec-warning.show { display:block; }
 .fs-wrapper { display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden;width:100%; }
-.fs-wrapper .main-layout { flex:1;min-height:0;overflow:hidden;display:flex;flex-direction:row; }
+.fs-wrapper .main-layout { flex:1;min-height:0;overflow:hidden; }
 .fs-chat { display:none;flex-direction:column;background:var(--surface3);border-left:1px solid var(--border);overflow:hidden; }
 .fs-chat .messages { flex:1;padding:.75rem;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--scrollbar) transparent;min-height:0; }
 .fs-chat .messages .msg-text { background:var(--msg-bg);border-color:var(--border2);color:var(--text); }
@@ -60,4 +61,6 @@ video::-webkit-media-controls-start-playback-button { display:none!important; }
 .fs-chat .chat-input::placeholder { color:var(--text-faint); }
 .sync-indicator { position:absolute;top:.75rem;left:50%;transform:translateX(-50%);background:var(--surface3);border:1px solid var(--border-accent);border-radius:20px;padding:.35rem 1rem;font-family:monospace;font-size:.7rem;color:var(--accent);display:none;align-items:center;gap:.4rem;backdrop-filter:blur(8px);z-index:10; }
 .sync-indicator.show { display:flex; }
-@media(max-width:600px){ .player-btn { width:30px;height:30px; } .player-vol-slider { width:50px; } .player-controls { padding:.4rem .75rem .6rem; } }
+  .player-btn { width:30px;height:30px; }
+  .player-vol-slider { width:50px; }
+  .player-controls { padding:.4rem .75rem .6rem; }
