@@ -207,7 +207,7 @@ app.get('/video-stream/:roomId', (req, res) => {
   if (range) {
     const parts = range.replace(/bytes=/, '').split('-');
     const start = parseInt(parts[0], 10);
-    const CHUNK = 1 * 1024 * 1024;
+    const CHUNK = 256 * 1024;
     const end = parts[1] ? parseInt(parts[1], 10) : Math.min(start + CHUNK - 1, fileSize - 1);
     if (isNaN(start) || start >= fileSize || start > end) return res.status(416).set({ 'Content-Range': `bytes */${fileSize}` }).end();
     const chunkSize = end - start + 1;
